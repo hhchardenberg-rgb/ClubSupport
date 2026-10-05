@@ -43,7 +43,7 @@ export function LoginForm({ area }: { area: Area }) {
 
   if (step === "totp") {
     return (
-      <form onSubmit={onTotp} className="card" aria-labelledby="t">
+      <form method="post" onSubmit={onTotp} className="card" aria-labelledby="t">
         <h2 id="t">Verificatiecode</h2>
         <label htmlFor="code">6-cijferige code uit je authenticator-app</label>
         <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9 ]{6,7}" />
@@ -53,7 +53,7 @@ export function LoginForm({ area }: { area: Area }) {
     );
   }
   return (
-    <form onSubmit={onPassword} className="card" aria-labelledby="l">
+    <form method="post" onSubmit={onPassword} className="card" aria-labelledby="l">
       <h2 id="l">Inloggen</h2>
       <label htmlFor="email">E-mailadres</label>
       <input id="email" name="email" type="email" autoComplete="username" required />

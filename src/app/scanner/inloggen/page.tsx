@@ -8,7 +8,7 @@ export default function Page() {
     <>
       <SiteHeader area="scanner" />
       <main id="main">
-        <h1>Scanner</h1>
+        <h1>Inloggen</h1>
         <LoginForm area="scanner" />
       </main>
     </>

@@ -1,8 +1,9 @@
 import Link from "next/link";
 
-const NAMES = { ledenpas: "Ledenpas", scanner: "Scanner", beheer: "Beheer" } as const;
+const NAMES = { scanner: "Scanner", beheer: "Beheer" } as const;
 
-export function SiteHeader({ area }: { area?: keyof typeof NAMES }) {
+/** Ledenomgeving: alleen het merk. Scanner/Beheer: merk + omgevingsnaam, nergens aan de ledenkant gelinkt. */
+export function SiteHeader({ area, children }: { area?: keyof typeof NAMES; children?: React.ReactNode }) {
   return (
     <header className="site-header">
       <div className="in">
@@ -10,6 +11,7 @@ export function SiteHeader({ area }: { area?: keyof typeof NAMES }) {
           HHC <span>ClubSupport</span>
           {area ? <> · {NAMES[area]}</> : null}
         </Link>
+        {children}
       </div>
     </header>
   );

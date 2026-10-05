@@ -34,7 +34,7 @@ export function SetPasswordForm({ token, purpose }: { token: string; purpose: "a
       </div>
     );
   return (
-    <form onSubmit={onSubmit} className="card" aria-labelledby="h">
+    <form method="post" onSubmit={onSubmit} className="card" aria-labelledby="h">
       <h2 id="h">{purpose === "activation" ? "Kies je wachtwoord" : "Nieuw wachtwoord"}</h2>
       <label htmlFor="password">Wachtwoord (minimaal 12 tekens)</label>
       <input id="password" name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required />
@@ -59,7 +59,7 @@ export function ForgotForm() {
   }
   if (sent) return <div className="card" role="status"><p>{sent}</p></div>;
   return (
-    <form onSubmit={onSubmit} className="card" aria-labelledby="h">
+    <form method="post" onSubmit={onSubmit} className="card" aria-labelledby="h">
       <h2 id="h">Wachtwoord vergeten?</h2>
       <label htmlFor="email">E-mailadres van je account</label>
       <input id="email" name="email" type="email" autoComplete="username" required />
