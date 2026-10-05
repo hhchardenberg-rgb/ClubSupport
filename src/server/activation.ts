@@ -40,7 +40,7 @@ export async function isLinkUsable(token: unknown, purpose: Purpose): Promise<bo
  * Stelt het wachtwoord in via Better Auth (hashing en opslag door de identity provider; geen eigen crypto).
  * Activatie: bevestigt het e-mailadres. Beide: bestaande sessies worden ingetrokken.
  */
-export async function setPasswordWithToken(token: string, password: string, purpose: Purpose): Promise<{ ok: boolean; error?: string }> {
+export async function setPasswordWithToken(token: string, password: string, purpose: Purpose): Promise<{ ok: boolean; error?: string; area?: "ledenpas" | "beheer" | "scanner" }> {
   const pwError = validatePassword(password);
   if (pwError) return { ok: false, error: pwError };
   const userId = await consumeLinkToken(token, purpose);
@@ -56,5 +56,7 @@ export async function setPasswordWithToken(token: string, password: string, purp
   if (purpose === "activation") await db.update(user).set({ emailVerified: true, updatedAt: new Date() }).where(eq(user.id, userId));
   await db.delete(schema.session).where(eq(schema.session.userId, userId)); // alle bestaande sessies intrekken
   await audit({ actor: userId, action: purpose === "activation" ? "account.activate" : "account.password_reset", targetType: "user", targetId: userId });
-  return { ok: true };
+  const [u] = await db.select({ role: user.role }).from(user).where(eq(user.id, userId));
+  const area = u?.role === "scanner" ? "scanner" : u?.role === "manager" || u?.role === "sysadmin" ? "beheer" : "ledenpas";
+  return { ok: true, area };
 }

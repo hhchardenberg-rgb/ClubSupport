@@ -1,18 +1,24 @@
 /* Geen groen: alleen oranje, zwart, wit/grijs; rood alleen voor fouten/onomkeerbare acties.
    Huisstijl HHC Hardenberg (handboek 2024): oranje #ff6600 + zwart, altijd volle kleur (geen tinten).
-   Lettertype: DIN voorgeschreven (licentie nodig) → vrije look-alike Barlow, zelf gehost.
+   Lettertype: DIN Next LT Pro (Light/Regular/Medium/Bold) + FF DIN Black (merkwoord), door HHC aangeleverd.
    Contrast: oranje alleen als vlak met zwarte tekst, of als tekst op zwart. Nooit oranje tekst op wit/grijs. */
+@font-face{font-family:"DIN";src:url(/fonts/dinnext-light.woff2) format("woff2");font-weight:300;font-style:normal;font-display:swap}
+@font-face{font-family:"DIN";src:url(/fonts/dinnext-regular.woff2) format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"DIN";src:url(/fonts/dinnext-medium.woff2) format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:"DIN";src:url(/fonts/dinnext-bold.woff2) format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"DIN";src:url(/fonts/din-medium-italic.woff2) format("woff2");font-weight:400 500;font-style:italic;font-display:swap}
+@font-face{font-family:"DIN";src:url(/fonts/din-black.woff2) format("woff2");font-weight:900;font-style:normal;font-display:swap}
 :root{
   --orange:#ff6600;--black:#000;--white:#fff;--page:#f2f2f2;--line:#bdbdbd;--muted:#4a4a4a;
   --ok:#000000;--bad:#b00020;--warn:#000000;--radius:4px;
-  --font:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --font-display:"Barlow Condensed","Barlow",system-ui,sans-serif;
+  --font:"DIN",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-display:"DIN",system-ui,sans-serif;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--page);color:var(--black);font:400 17px/1.5 var(--font)}
 main{max-width:760px;margin:0 auto;padding:16px 16px 48px}
 h1,h2,h3{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.01em;line-height:1.05;margin:.3em 0 .4em}
-h1{font-weight:900;font-size:2.6rem}h2{font-weight:700;font-size:1.6rem}h3{font-weight:700;font-size:1.2rem}
+h1{font-weight:300;font-size:2.4rem}h2{font-weight:300;font-size:1.6rem}h3{font-weight:500;font-size:1.2rem}
 a{color:var(--black);text-underline-offset:3px}
 .site-header{background:var(--black);color:var(--white);border-bottom:6px solid var(--orange)}
 .site-header .in{max-width:760px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -25,7 +31,7 @@ a{color:var(--black);text-underline-offset:3px}
 label{display:block;font-weight:700;margin:14px 0 4px}
 input,select,textarea{width:100%;min-height:48px;padding:10px 12px;font:inherit;color:var(--black);background:var(--white);border:2px solid var(--black);border-radius:var(--radius)}
 :focus-visible{outline:3px solid var(--black);outline-offset:2px;box-shadow:0 0 0 6px var(--orange)}
-button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:10px 20px;font:inherit;font-family:var(--font-display);font-size:1.1rem;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:var(--black);background:var(--orange);border:2px solid var(--black);border-radius:var(--radius);cursor:pointer;text-decoration:none}
+button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:10px 20px;font:inherit;font-family:var(--font-display);font-size:1.1rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--black);background:var(--orange);border:2px solid var(--black);border-radius:var(--radius);cursor:pointer;text-decoration:none}
 button.secondary,.btn.secondary{background:var(--white);color:var(--black)}
 button.dark,.btn.dark{background:var(--black);color:var(--white)}
 button.danger{background:var(--bad);color:var(--white);border-color:var(--bad)}
@@ -39,5 +45,3 @@ table{width:100%;border-collapse:collapse;background:var(--white)}th,td{text-ali
 th{font-family:var(--font-display);text-transform:uppercase}
 .badge{display:inline-block;padding:2px 10px;border-radius:99px;font-weight:700;border:2px solid currentColor}
 .badge.ok{color:var(--ok)}.badge.bad{color:var(--bad)}.badge.warn{color:var(--warn)}
-.slogan{font-family:var(--font-display);font-weight:900;text-transform:uppercase;font-size:2.4rem;line-height:.95}
-.slogan b{color:var(--orange);background:var(--black);padding:0 .15em}
