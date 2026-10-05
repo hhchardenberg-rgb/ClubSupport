@@ -15,9 +15,10 @@ async function main() {
   if (!email || !process.env.DATABASE_URL) return;
   if (process.env.VERCEL && process.env.VERCEL_ENV !== "production") return;
 
-  const [{ n }] = (await db.execute(sql`select count(*)::int as n from "user" where role = 'sysadmin'`)).rows as { n: number }[];
+  // Alleen doorgaan zolang er nog geen GEACTIVEERDE systeembeheerder is (wel opnieuw een verse link mogelijk).
+  const [{ n }] = (await db.execute(sql`select count(*)::int as n from "user" where role = 'sysadmin' and email_verified = true`)).rows as { n: number }[];
   if (n > 0) {
-    console.log("Bootstrap: er bestaat al een systeembeheerder — overgeslagen.");
+    console.log("Bootstrap: er bestaat al een geactiveerde systeembeheerder — overgeslagen.");
     return;
   }
   const [existing] = await db.select().from(schema.user).where(eq(schema.user.email, email));

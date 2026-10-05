@@ -40,7 +40,7 @@ describe("uitnodiging, activatie en reset (tests 13, 14)", () => {
     expect(await isLinkUsable(token, "reset")).toBe(false); // verkeerd doel
     expect(await setPasswordWithToken(token, "kort", "activation")).toMatchObject({ ok: false });
     expect(await isLinkUsable(token, "activation")).toBe(true); // zwak wachtwoord verbrandt de link niet
-    expect(await setPasswordWithToken(token, "een-lang-wachtwoord-123", "activation")).toEqual({ ok: true });
+    expect(await setPasswordWithToken(token, "een-lang-wachtwoord-123", "activation")).toMatchObject({ ok: true, area: "ledenpas" });
     expect((await db.select().from(schema.user).where(eq(schema.user.id, r.userId!)))[0].emailVerified).toBe(true);
     expect(await setPasswordWithToken(token, "een-ander-wachtwoord-456", "activation")).toMatchObject({ ok: false }); // eenmalig
     const creds = await db.select().from(schema.authAccount).where(eq(schema.authAccount.userId, r.userId!));
@@ -76,7 +76,7 @@ describe("uitnodiging, activatie en reset (tests 13, 14)", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].text).not.toContain("oud-wachtwoord");
     const t = tokenFrom(sent[0].text);
-    expect(await setPasswordWithToken(t, "nieuw-wachtwoord-12345", "reset")).toEqual({ ok: true });
+    expect(await setPasswordWithToken(t, "nieuw-wachtwoord-12345", "reset")).toMatchObject({ ok: true });
     expect(await db.select().from(schema.session).where(eq(schema.session.userId, uid))).toHaveLength(0);
     expect(await setPasswordWithToken(t, "nog-een-wachtwoord-12345", "reset")).toMatchObject({ ok: false });
   });
