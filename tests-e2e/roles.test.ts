@@ -27,6 +27,7 @@ beforeAll(async () => {
   const { auth } = await import("@/lib/auth");
   const ctx = await auth.$context;
   const hash = await ctx.password.hash("een-lang-wachtwoord-1");
+  await db.execute((await import("drizzle-orm")).sql`truncate rate_limit`); // eerdere testbestanden hebben de inlogbegrenzing gebruikt
   for (const [id, role] of [["member", "member"], ["scanner", "scanner"], ["manager", "manager"], ["sysadmin", "sysadmin"]] as const) {
     await db.insert(schema.user).values({ id, name: id, email: `${id}@example.test`, role, emailVerified: true });
     await ctx.internalAdapter.linkAccount({ userId: id, providerId: "credential", accountId: id, password: hash });

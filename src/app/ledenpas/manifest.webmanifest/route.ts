@@ -8,7 +8,7 @@ export function GET() {
       description: "Je digitale ledenpas van HHC ClubSupport.",
       id: "/ledenpas",
       start_url: "/ledenpas",
-      scope: "/ledenpas/",
+      scope: "/ledenpas",
       display: "standalone",
       orientation: "portrait",
       lang: "nl",

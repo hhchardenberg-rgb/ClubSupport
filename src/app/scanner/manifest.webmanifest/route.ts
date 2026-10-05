@@ -9,7 +9,7 @@ export function GET() {
       description: "Ledenpassen controleren (online).",
       id: "/scanner",
       start_url: "/scanner",
-      scope: "/scanner/",
+      scope: "/scanner",
       display: "standalone",
       orientation: "portrait",
       lang: "nl",

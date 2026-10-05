@@ -19,7 +19,7 @@ export function InstallHelp() {
       setEvt(e as BIPEvent);
     };
     window.addEventListener("beforeinstallprompt", onPrompt);
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw-ledenpas.js", { scope: "/ledenpas/" }).catch(() => undefined);
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw-ledenpas.js", { scope: "/ledenpas" }).catch(() => undefined);
     return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, []);
 

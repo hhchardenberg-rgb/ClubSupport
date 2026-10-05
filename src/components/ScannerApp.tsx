@@ -111,7 +111,7 @@ export function ScannerApp() {
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
     document.addEventListener("visibilitychange", hide);
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw-scanner.js", { scope: "/scanner/" }).catch(() => undefined);
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw-scanner.js", { scope: "/scanner" }).catch(() => undefined);
     return () => {
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
@@ -141,7 +141,7 @@ export function ScannerApp() {
       {phase === "result" && p && (
         <section role="alert" aria-live="assertive" style={{ ...panelStyle[p.cls], borderRadius: 8, padding: "24px 16px", textAlign: "center", margin: "12px 0" }}>
           {p.icon}
-          <h1 style={{ fontSize: "clamp(2.2rem, 11vw, 3.6rem)", margin: "8px 0", fontWeight: 900 }}>{p.title}</h1>
+          <h1 style={{ fontSize: "clamp(1.6rem, 8.5vw, 3.2rem)", margin: "8px 0", fontWeight: 900, overflowWrap: "anywhere", lineHeight: 1.05 }}>{p.title}</h1>
           {p.lines.map((l, i) => (
             <p key={l} style={{ margin: "4px 0", fontSize: i === 0 && p.cls !== "ok" ? "1.5rem" : "1.7rem", fontWeight: 700 }}>{l}</p>
           ))}
