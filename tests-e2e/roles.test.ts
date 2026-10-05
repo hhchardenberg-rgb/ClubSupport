@@ -31,7 +31,7 @@ beforeAll(async () => {
     await db.insert(schema.user).values({ id, name: id, email: `${id}@example.test`, role, emailVerified: true });
     await ctx.internalAdapter.linkAccount({ userId: id, providerId: "credential", accountId: id, password: hash });
   }
-  server = spawn("npx", ["next", "start", "-p", String(PORT)], { env: { ...process.env, APP_URL: BASE, BETTER_AUTH_URL: BASE, EMAIL_MODE: "disabled" }, stdio: "ignore" });
+  server = spawn("npx", ["next", "start", "-p", String(PORT)], { env: { ...process.env, APP_URL: BASE, BETTER_AUTH_URL: BASE, EMAIL_MODE: "disabled" }, stdio: "ignore", detached: true });
   for (let i = 0; i < 60; i++) {
     try {
       if ((await fetch(`${BASE}/api/health`)).ok) break;
@@ -44,7 +44,12 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(() => {
-  server?.kill();
+  // Hele procesgroep stoppen (npx start een kindproces); anders blijft een oude server hangen.
+  if (server?.pid) {
+    try {
+      process.kill(-server.pid, "SIGTERM");
+    } catch {}
+  }
 });
 
 describe("autorisatie per route (test 9 en server-side controle)", () => {
@@ -103,5 +108,48 @@ describe("autorisatie per route (test 9 en server-side controle)", () => {
     expect(res.headers.get("permissions-policy")).toContain("camera=()");
     expect(res.headers.get("cache-control")).toContain("no-store");
     expect(res.headers.get("x-powered-by")).toBeNull();
+  });
+});
+
+describe("scan-endpoint (tests 2, 7, 9)", () => {
+  async function scan(who: string | undefined, code: unknown, origin: string | null = BASE) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (who) headers.cookie = cookies[who];
+    if (origin) headers.Origin = origin;
+    const res = await fetch(`${BASE}/api/scan`, { method: "POST", headers, body: JSON.stringify({ code }) });
+    return { status: res.status, body: await res.json().catch(() => null), cache: res.headers.get("cache-control") };
+  }
+
+  it("zonder sessie, als lid of zonder eigen Origin: geen scan", async () => {
+    expect((await scan(undefined, "x")).status).toBe(401);
+    expect((await scan("member", "x")).status).toBe(401);
+    expect((await scan("scanner", "x", null)).status).toBe(403);
+    expect((await scan("scanner", "x", "https://evil.example")).status).toBe(403);
+  });
+
+  it("controleur scant: geldig toont alleen naam en lidnummer; wijzigingen werken direct; antwoorden niet cachebaar", async () => {
+    const { db, schema } = await import("@/db");
+    const { makeMember, tokenOf } = await import("../tests/helpers");
+    const { deactivatePass, reissuePass } = await import("@/server/passes");
+    const { passId, member } = await makeMember(1, "Eva");
+    const token = (await tokenOf(passId))!;
+    const ok = await scan("scanner", token);
+    expect(ok.status).toBe(200);
+    expect(ok.body).toEqual({ outcome: "valid", name: "Eva 1", memberNumber: "T1" });
+    expect(ok.cache).toContain("no-store");
+    await deactivatePass(passId, "manager", "test");
+    expect((await scan("scanner", token)).body.outcome).toBe("inactive");
+    await reissuePass(member.id, "manager", "lost", "kwijt");
+    expect((await scan("scanner", token)).body).toEqual({ outcome: "revoked" });
+    // onbekend / gemanipuleerd / misvormd: generiek, zonder gegevens
+    for (const bad of ["A".repeat(43), token.slice(0, -1) + "A", "kort", "", null, { x: 1 }]) expect((await scan("scanner", bad)).body).toEqual({ outcome: "unknown" });
+    // scanlog zonder ruwe token
+    expect(JSON.stringify(await db.select().from(schema.scanEvent))).not.toContain(token);
+  });
+
+  it("te veel scans worden begrensd (429, rate_limited)", async () => {
+    let limited = 0;
+    for (let i = 0; i < 70; i++) if ((await scan("manager", "A".repeat(43))).status === 429) limited++;
+    expect(limited).toBeGreaterThan(0);
   });
 });
