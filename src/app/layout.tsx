@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "Je digitale ledenpas van supportersvereniging HHC ClubSupport.",
   icons: { icon: "/icons/ledenpas-192.png", apple: "/icons/apple-touch-ledenpas.png" },
 };
-export const viewport: Viewport = { themeColor: "#000000", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#000000", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 /** Dynamisch renderen is nodig: de CSP-nonce uit proxy.ts wordt alleen op scripts gezet bij per-verzoek-rendering. */
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

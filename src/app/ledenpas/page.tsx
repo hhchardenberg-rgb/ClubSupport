@@ -1,9 +1,10 @@
 import QRCode from "qrcode";
 import { InstallHelp } from "@/components/InstallHelp";
+import { OfflineSync, OfflineToggle } from "@/components/OfflineSync";
+import { env } from "@/lib/env";
 import { PassCarousel, type PassItem } from "@/components/PassCarousel";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SignOutButton } from "@/components/SignOutButton";
-import { walletStatus } from "@/lib/wallet-config";
 import { requireMember } from "@/lib/session";
 import { listPassesForAccount } from "@/server/accounts";
 import { revealToken } from "@/server/passes";
@@ -14,7 +15,6 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const s = await requireMember();
   const passes = await listPassesForAccount(s.user.id);
-  const wallet = walletStatus();
   const items: PassItem[] = await Promise.all(
     passes.map(async (p) => {
       let svg: string | null = null;
@@ -29,7 +29,7 @@ export default async function Page() {
           unavailable = true;
         }
       }
-      return { id: p.passId, name: p.fullName, number: p.memberNumber, active: p.status === "active", svg, unavailable, apple: wallet.apple, google: wallet.google };
+      return { id: p.passId, name: p.fullName, number: p.memberNumber, active: p.status === "active", svg, unavailable };
     }),
   );
 
@@ -51,8 +51,10 @@ export default async function Page() {
           <PassCarousel items={items} />
         )}
         <p className="muted" style={{ fontSize: ".95rem" }}>
-          Zonder internet kun je je pas tonen via Apple Wallet of Google Wallet, als je die hebt toegevoegd. De actuele geldigheid wordt altijd online gecontroleerd bij de scanner. Een screenshot of kopie van de QR-code is niet geheel te voorkomen: de controleur vergelijkt daarom altijd de naam.
+          De actuele geldigheid wordt altijd online gecontroleerd bij de scanner. Een screenshot of kopie van de QR-code is niet geheel te voorkomen: de controleur vergelijkt daarom altijd de naam.
         </p>
+        {items.length > 0 && <OfflineToggle items={items} maxDays={env.offlinePassMaxDays} />}
+        {items.length > 0 && <OfflineSync items={items} maxDays={env.offlinePassMaxDays} />}
         <InstallHelp />
       </main>
     </>

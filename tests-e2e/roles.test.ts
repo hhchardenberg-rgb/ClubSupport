@@ -61,23 +61,23 @@ describe("autorisatie per route (test 9 en server-side controle)", () => {
   });
 
   it("lid heeft geen toegang tot beheer", async () => {
-    for (const p of ["/beheer", "/beheer/leden", "/beheer/import", "/beheer/personeel", "/beheer/audit"]) expect((await get(p, "member")).location, p).toContain("/beheer/geen-toegang");
+    for (const p of ["/beheer", "/beheer/leden", "/beheer/import", "/beheer/accounts", "/beheer/audit", "/beheer/controlelogboek"]) expect((await get(p, "member")).location, p).toContain("/beheer/geen-toegang");
   });
 
-  it("scanner-rol kan niet naar ledenbeheer, import, personeel of audit", async () => {
-    for (const p of ["/beheer", "/beheer/leden", "/beheer/leden/nieuw", "/beheer/import", "/beheer/personeel", "/beheer/audit"]) expect((await get(p, "scanner")).location, p).toContain("/beheer/geen-toegang");
+  it("scanner-rol kan niet naar ledenbeheer, import, accounts of audit", async () => {
+    for (const p of ["/beheer", "/beheer/leden", "/beheer/leden/nieuw", "/beheer/import", "/beheer/accounts", "/beheer/audit", "/beheer/controlelogboek"]) expect((await get(p, "scanner")).location, p).toContain("/beheer/geen-toegang");
   });
 
-  it("ledenbeheerder: leden/import ja, personeel en audit nee", async () => {
-    for (const p of ["/beheer", "/beheer/leden", "/beheer/leden/nieuw", "/beheer/import"]) expect((await get(p, "manager")).status, p).toBe(200);
-    for (const p of ["/beheer/personeel", "/beheer/audit"]) expect((await get(p, "manager")).location, p).toContain("/beheer/geen-toegang");
+  it("ledenbeheerder: leden/import ja, accounts en audit nee", async () => {
+    for (const p of ["/beheer", "/beheer/leden", "/beheer/leden/nieuw", "/beheer/import", "/beheer/controlelogboek"]) expect((await get(p, "manager")).status, p).toBe(200);
+    for (const p of ["/beheer/accounts", "/beheer/audit"]) expect((await get(p, "manager")).location, p).toContain("/beheer/geen-toegang");
   });
 
   it("beheerrol zonder MFA wordt naar MFA-inrichting gestuurd; met MFA krijgt systeembeheer alles", async () => {
     expect((await get("/beheer/leden", "sysadmin")).location).toContain("/beheer/mfa-instellen");
     const { db, schema } = await import("@/db");
     await db.update(schema.user).set({ twoFactorEnabled: true }).where(eq(schema.user.id, "sysadmin"));
-    for (const p of ["/beheer", "/beheer/leden", "/beheer/personeel", "/beheer/audit", "/beheer/import"]) expect((await get(p, "sysadmin")).status, p).toBe(200);
+    for (const p of ["/beheer", "/beheer/leden", "/beheer/accounts", "/beheer/audit", "/beheer/import", "/beheer/controlelogboek"]) expect((await get(p, "sysadmin")).status, p).toBe(200);
   });
 
   it("geblokkeerd account heeft direct geen toegang meer", async () => {
@@ -155,42 +155,64 @@ describe("scan-endpoint (tests 2, 7, 9)", () => {
   });
 });
 
-describe("wallet-endpoints en ledentoegang (tests 3, 10, 11)", () => {
-  it("lid ziet alleen eigen gekoppelde passen; andermans pas-id geeft 404; niet geconfigureerd geeft duidelijke melding", async () => {
+describe("ledentoegang (tests 3, 11)", () => {
+  it("lid ziet alleen eigen gekoppelde passen; andermans pas verschijnt niet", async () => {
     const { db, schema } = await import("@/db");
     const { makeMember } = await import("../tests/helpers");
     const mine = await makeMember(11, "Mijn Lid");
-    const other = await makeMember(12, "Ander Lid");
+    await makeMember(12, "Ander Lid");
     await db.insert(schema.accountMemberAccess).values({ userId: "member", memberId: mine.member.id, grantedBy: "manager" });
-    const get2 = async (p: string, who?: string) => {
-      const r = await fetch(BASE + p, { redirect: "manual", headers: who ? { cookie: cookies[who] } : {} });
-      return { status: r.status, body: await r.json().catch(() => null) };
-    };
-    for (const w of ["apple", "google"]) {
-      expect((await get2(`/api/wallet/${w}/${mine.passId}`)).status, `${w} zonder sessie`).toBe(401);
-      expect((await get2(`/api/wallet/${w}/${other.passId}`, "member")).status, `${w} andermans pas`).toBe(404);
-      expect((await get2(`/api/wallet/${w}/niet-een-uuid`, "member")).status).toBe(404);
-      const own = await get2(`/api/wallet/${w}/${mine.passId}`, "member");
-      expect(own.status, `${w} niet geconfigureerd`).toBe(503);
-      expect(own.body.message).toMatch(/nog niet ingericht/);
-    }
-    const page = await fetch(BASE + "/ledenpas", { headers: { cookie: cookies.member } });
-    const html = await page.text();
+    const html = await (await fetch(BASE + "/ledenpas", { headers: { cookie: cookies.member } })).text();
     expect(html).toContain("Mijn Lid 11");
     expect(html).not.toContain("Ander Lid 12");
-    expect(html).toMatch(/Apple Wallet en Google Wallet zijn nog niet beschikbaar/);
+    expect(html).not.toMatch(/Wallet/);
   });
 
-  it("gedeactiveerde pas is niet meer via Wallet op te halen en toont geen QR", async () => {
+  it("gedeactiveerde pas toont geen QR", async () => {
     const { db, schema } = await import("@/db");
     const { makeMember } = await import("../tests/helpers");
     const { deactivatePass } = await import("@/server/passes");
     const m = await makeMember(13, "Gedeactiveerd Lid");
     await db.insert(schema.accountMemberAccess).values({ userId: "member", memberId: m.member.id, grantedBy: "manager" });
     await deactivatePass(m.passId, "manager", "test");
-    const r = await fetch(`${BASE}/api/wallet/apple/${m.passId}`, { headers: { cookie: cookies.member } });
-    expect(r.status).toBe(404);
     const html = await (await fetch(BASE + "/ledenpas", { headers: { cookie: cookies.member } })).text();
     expect(html).toContain("niet actief");
+  });
+});
+
+describe("zoeken door de controleur en controlelogboek (e2e)", () => {
+  async function post(path: string, who: string | undefined, body: unknown, origin: string | null = BASE) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (who) headers.cookie = cookies[who];
+    if (origin) headers.Origin = origin;
+    const res = await fetch(`${BASE}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+    return { status: res.status, body: await res.json().catch(() => null), cache: res.headers.get("cache-control") };
+  }
+
+  it("zonder sessie, als lid of zonder eigen Origin: geen zoekresultaten", async () => {
+    expect((await post("/api/scan/lookup", undefined, { q: "anna" })).status).toBe(401);
+    expect((await post("/api/scan/lookup", "member", { q: "anna" })).status).toBe(401);
+    expect((await post("/api/scan/lookup", "scanner", { q: "anna" }, null)).status).toBe(403);
+    expect((await post("/api/scan/lookup", "scanner", { q: "anna" }, "https://evil.example")).status).toBe(403);
+  });
+
+  it("controleur zoekt op naam en lidnummer; antwoord is minimaal en niet cachebaar", async () => {
+    const { makeMember } = await import("../tests/helpers");
+    await makeMember(41, "Zoekbaar");
+    const byName = await post("/api/scan/lookup", "scanner", { q: "zoekb" });
+    expect(byName.status).toBe(200);
+    expect(byName.body).toEqual({ ok: true, tooMany: false, results: [{ name: "Zoekbaar 41", memberNumber: "T41", pass: "active" }] });
+    expect(byName.cache).toContain("no-store");
+    expect((await post("/api/scan/lookup", "scanner", { q: "T41" })).body.results[0].memberNumber).toBe("T41");
+    expect(JSON.stringify(byName.body)).not.toMatch(/@|email/i);
+    expect((await post("/api/scan/lookup", "scanner", { q: "" })).status).toBe(400);
+  });
+
+  it("controlelogboek toont de handelingen van de controleur voor beheer", async () => {
+    const html = await (await fetch(`${BASE}/beheer/controlelogboek?outcome=lookup`, { headers: { cookie: cookies.manager } })).text();
+    expect(html).toContain("Controlelogboek");
+    expect(html).toContain("Zoekopdracht");
+    const all = await (await fetch(`${BASE}/beheer/controlelogboek`, { headers: { cookie: cookies.sysadmin } })).text();
+    expect(all).toMatch(/Geldig|Onbekende code/);
   });
 });

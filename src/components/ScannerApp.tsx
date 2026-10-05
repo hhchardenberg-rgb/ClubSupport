@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { interpretScan, type ScanView } from "@/lib/scan-view";
+import { interpretLookup, interpretScan, type LookupView, type ScanView } from "@/lib/scan-view";
 
 type Phase = "idle" | "scanning" | "checking" | "result";
 
@@ -40,7 +40,10 @@ export function ScannerApp() {
   const [view, setView] = useState<ScanView | null>(null);
   const [camError, setCamError] = useState("");
   const [online, setOnline] = useState(true);
+  const [lookup, setLookup] = useState<LookupView | null>(null);
+  const [lookupBusy, setLookupBusy] = useState(false);
   const busy = useRef(false);
+  const lookupRef = useRef(false);
   const scanner = useRef<{ stop: () => Promise<void>; clear: () => void } | null>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
 
@@ -80,6 +83,28 @@ export function ScannerApp() {
     },
     [stopCamera],
   );
+
+  const search = useCallback(async (raw: string) => {
+    const q = raw.trim().slice(0, 60);
+    if (!q || lookupRef.current) return;
+    lookupRef.current = true;
+    setLookupBusy(true);
+    setLookup(null);
+    let view: LookupView;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
+    try {
+      const res = await fetch("/api/scan/lookup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q }), cache: "no-store", credentials: "same-origin", signal: ctl.signal });
+      view = interpretLookup(res.status, await res.json().catch(() => null));
+    } catch {
+      view = interpretLookup(null, null); // geen verbinding → niets tonen als geldig
+    } finally {
+      clearTimeout(timer);
+    }
+    setLookup(view);
+    setLookupBusy(false);
+    lookupRef.current = false;
+  }, []);
 
   const startCamera = useCallback(async () => {
     setCamError("");
@@ -180,6 +205,48 @@ export function ScannerApp() {
         <label htmlFor="code">Code van de pas</label>
         <input id="code" name="code" autoCapitalize="off" autoCorrect="off" autoComplete="off" spellCheck={false} maxLength={100} required />
         <p><button disabled={!online || phase === "checking"}>Controleren</button></p>
+      </form>
+
+      <form
+        method="post"
+        className="card"
+        aria-labelledby="zoek"
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void search(String(new FormData(e.currentTarget).get("q") ?? ""));
+        }}
+      >
+        <h2 id="zoek">Zoeken op naam of lidnummer</h2>
+        <p className="muted" style={{ marginTop: 0 }}>Voor een lid dat zijn pas niet bij zich heeft. Controleer altijd de identiteit met een legitimatiebewijs.</p>
+        <label htmlFor="q">Naam (minimaal 3 letters) of lidnummer</label>
+        <input id="q" name="q" autoCapitalize="off" autoCorrect="off" autoComplete="off" spellCheck={false} maxLength={60} required />
+        <p><button disabled={!online || lookupBusy}>{lookupBusy ? "Zoeken…" : "Zoeken"}</button></p>
+        <div aria-live="polite">
+          {lookup?.kind === "results" && lookup.results.length === 0 && <p className="notice">Geen lid gevonden. Controleer de schrijfwijze of zoek op lidnummer.</p>}
+          {lookup?.kind === "results" && lookup.results.length > 0 && (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
+              {lookup.results.map((r) => {
+                const st = r.pass === "active" ? { bg: "#000", fg: "#fff", bd: "#ff6600", icon: Icon.check, label: "PAS ACTIEF", sub: "Geldig lid" } : r.pass === "deactivated" ? { bg: "#b00020", fg: "#fff", bd: "#000", icon: Icon.cross, label: "PAS GEDEACTIVEERD", sub: "Niet geldig" } : { bg: "#ff6600", fg: "#000", bd: "#000", icon: Icon.cross, label: "GEEN ACTIEVE PAS", sub: "Niet geldig" };
+                return (
+                  <li key={r.memberNumber} style={{ background: st.bg, color: st.fg, border: `5px solid ${st.bd}`, borderRadius: 10, padding: 12, display: "flex", gap: 12, alignItems: "center" }}>
+                    <span style={{ flex: "0 0 auto", transform: "scale(.6)", transformOrigin: "left center", width: 58 }}>{st.icon}</span>
+                    <span>
+                      <strong style={{ display: "block", fontSize: "1.3rem" }}>{r.name}</strong>
+                      <span>Lidnummer {r.memberNumber}</span>
+                      <strong style={{ display: "block", marginTop: 4 }}>{st.label} · {st.sub}</strong>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {lookup?.kind === "tooMany" && <p className="notice" role="status">Te veel resultaten. Typ een langere naam of gebruik het lidnummer.</p>}
+          {lookup?.kind === "invalid" && <p className="notice" role="status">Voer een naam (minimaal 3 letters) of een lidnummer in.</p>}
+          {lookup?.kind === "wait" && <p className="notice" role="status">Even wachten: te veel zoekopdrachten achter elkaar.</p>}
+          {lookup?.kind === "session" && <p className="notice" role="alert">Sessie verlopen. Log opnieuw in.</p>}
+          {lookup?.kind === "unchecked" && <p role="alert" style={{ background: "#ff6600", border: "4px solid #000", borderRadius: 8, padding: 12, fontWeight: 700 }}>NIET GECONTROLEERD · verbinding nodig. Er is geen status vastgesteld.</p>}
+        </div>
       </form>
     </div>
   );

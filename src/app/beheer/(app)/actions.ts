@@ -12,7 +12,6 @@ import { requireStaff } from "@/lib/session";
 import { createMemberWithPass, isValidEmail, linkMemberToAccount, normalizeEmail, previewAccountForEmail, unlinkMemberFromAccount } from "@/server/accounts";
 import { processOutbox, resendInvitation } from "@/server/email/outbox";
 import { commitImport, previewImport } from "@/server/import";
-import { syncGoogleForMember } from "@/server/wallet-sync";
 import { DomainError, deactivatePass, deleteMember, reactivatePass, reissuePass, revokePass } from "@/server/passes";
 
 export type FormState = { error?: string; needsConfirm?: { email: string; members: { memberNumber: string; fullName: string }[]; isNewAccount: boolean } } | undefined;
@@ -90,7 +89,6 @@ export async function deactivateAction(f: FormData) {
   await flow(`/beheer/leden/${id}`, async () => {
     if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig de actie met het vinkje.");
     await deactivatePass(str(f, "passId"), s.user.id, str(f, "reason"));
-    await syncGoogleForMember(str(f, "memberId") || id);
     return "Pas gedeactiveerd. De QR-code is direct ongeldig.";
   });
 }
@@ -101,7 +99,6 @@ export async function reactivateAction(f: FormData) {
   await flow(`/beheer/leden/${id}`, async () => {
     if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig de actie met het vinkje.");
     await reactivatePass(str(f, "passId"), s.user.id, str(f, "reason"));
-    await syncGoogleForMember(str(f, "memberId") || id);
     return "Pas opnieuw geactiveerd.";
   });
 }
@@ -114,7 +111,6 @@ export async function reissueAction(f: FormData) {
     const reason = str(f, "kind");
     if (!["reissued", "lost", "leaked"].includes(reason)) throw new DomainError("v", "Kies een reden.");
     await reissuePass(id, s.user.id, reason as "reissued" | "lost" | "leaked", str(f, "reason"));
-    await syncGoogleForMember(str(f, "memberId") || id);
     return "Nieuwe pas uitgegeven. De oude QR-code is definitief ingetrokken.";
   });
 }
@@ -125,7 +121,6 @@ export async function revokeAction(f: FormData) {
   await flow(`/beheer/leden/${id}`, async () => {
     if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig de actie met het vinkje.");
     await revokePass(str(f, "passId"), s.user.id, "admin", str(f, "reason"));
-    await syncGoogleForMember(str(f, "memberId") || id);
     return "Pas definitief ingetrokken.";
   });
 }
@@ -137,7 +132,6 @@ export async function deleteMemberAction(f: FormData) {
   await flow(`/beheer/leden/${id}`, async () => {
     if (str(f, "typed") !== "VERWIJDER") throw new DomainError("confirm", "Typ VERWIJDER om te bevestigen.");
     await deleteMember(id, s.user.id, str(f, "reason"));
-    await syncGoogleForMember(str(f, "memberId") || id);
     return "Lid verwijderd; de pas is direct ongeldig.";
   });
 }
@@ -208,7 +202,7 @@ export async function commitImportAction(f: FormData) {
   });
 }
 
-/* ------------------------------ personeel ------------------------------ */
+/* ------------------------------ accounts (staf) ------------------------------ */
 
 async function activeSysadmins(excludeId?: string) {
   const rows = await db.select({ id: schema.user.id }).from(schema.user).where(and(eq(schema.user.role, "sysadmin"), isNull(schema.user.disabledAt)));
@@ -217,7 +211,7 @@ async function activeSysadmins(excludeId?: string) {
 
 export async function createStaffAction(f: FormData) {
   const s = await requireStaff("beheer", "staff.manage");
-  await flow("/beheer/personeel", async () => {
+  await flow("/beheer/accounts", async () => {
     const email = normalizeEmail(str(f, "email"));
     const name = str(f, "name");
     const role = str(f, "role") as Role;
@@ -238,7 +232,7 @@ export async function createStaffAction(f: FormData) {
 
 export async function changeRoleAction(f: FormData) {
   const s = await requireStaff("beheer", "staff.manage");
-  await flow("/beheer/personeel", async () => {
+  await flow("/beheer/accounts", async () => {
     const id = str(f, "userId");
     const role = str(f, "role") as Role;
     if (!(ROLES as readonly string[]).includes(role) || role === "member") throw new DomainError("v", "Ongeldige rol.");
@@ -257,7 +251,7 @@ export async function changeRoleAction(f: FormData) {
 
 export async function toggleStaffAction(f: FormData) {
   const s = await requireStaff("beheer", "staff.manage");
-  await flow("/beheer/personeel", async () => {
+  await flow("/beheer/accounts", async () => {
     const id = str(f, "userId");
     const disable = str(f, "disable") === "1";
     if (id === s.user.id) throw new DomainError("self", "Je kunt je eigen account niet blokkeren.");
@@ -276,7 +270,7 @@ export async function toggleStaffAction(f: FormData) {
 /** E-mailadres van een staf-account wijzigen (ook voor de eerste systeembeheerder). Nieuw adres moet opnieuw activeren. */
 export async function changeStaffEmailAction(f: FormData) {
   const s = await requireStaff("beheer", "staff.manage");
-  await flow("/beheer/personeel", async () => {
+  await flow("/beheer/accounts", async () => {
     const id = str(f, "userId");
     const email = normalizeEmail(str(f, "email"));
     if (!isValidEmail(email)) throw new DomainError("v", "Ongeldig e-mailadres.");
@@ -297,7 +291,7 @@ export async function changeStaffEmailAction(f: FormData) {
 
 export async function resendStaffInviteAction(f: FormData) {
   const s = await requireStaff("beheer", "staff.manage");
-  await flow("/beheer/personeel", async () => {
+  await flow("/beheer/accounts", async () => {
     try {
       await resendInvitation(str(f, "userId"), null);
     } catch (e) {

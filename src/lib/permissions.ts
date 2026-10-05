@@ -8,6 +8,7 @@ export type Role = (typeof ROLES)[number];
 export const PERMISSIONS = [
   "member.self", // eigen gekoppelde leden/passen bekijken
   "scan", // pas scannen
+  "members.lookup", // beperkt zoeken (naam/lidnummer) voor controle zonder pas: alleen naam, lidnummer, passtatus
   "members.read",
   "members.write",
   "passes.manage", // aanmaken, deactiveren, heruitgeven, verwijderen
@@ -16,14 +17,15 @@ export const PERMISSIONS = [
   "email.view",
   "staff.manage", // staf-accounts en rollen
   "audit.read",
+  "scanlog.read", // controlelogboek (wie scande/zocht wat en wanneer)
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
-const MANAGER: Permission[] = ["scan", "members.read", "members.write", "passes.manage", "access.manage", "import", "email.view"];
+const MANAGER: Permission[] = ["scan", "members.lookup", "scanlog.read", "members.read", "members.write", "passes.manage", "access.manage", "import", "email.view"];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   member: ["member.self"],
-  scanner: ["scan"],
+  scanner: ["scan", "members.lookup"],
   manager: MANAGER,
   sysadmin: [...MANAGER, "staff.manage", "audit.read"],
 };

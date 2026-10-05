@@ -31,4 +31,6 @@ export const env = {
   auditRetentionDays: Number(process.env.AUDIT_RETENTION_DAYS ?? 730),
   deletedMemberRetentionDays: Number(process.env.DELETED_MEMBER_RETENTION_DAYS ?? 90),
   requireMfaForScanner: process.env.REQUIRE_MFA_SCANNER === "true",
+  /** Hoe lang de offline kopie van passen op het toestel van een lid bruikbaar blijft. */
+  offlinePassMaxDays: Math.min(90, Math.max(1, Number(process.env.OFFLINE_PASS_MAX_DAYS ?? 30) || 30)),
 };

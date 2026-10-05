@@ -27,7 +27,7 @@ Extra keuzes die ik heb gemaakt: *gedeactiveerd* is tijdelijk en heractiveerbaar
 
 - **Next.js 16 (App Router, TypeScript)** op **Vercel**; **Postgres (Neon)** via **Drizzle ORM** met SQL-migraties in `drizzle/` (reproduceerbaar; draaien automatisch bij productie-deploys).
 - **Better Auth** is de identity provider (wachtwoord-hashing, sessies, TOTP-MFA). Er is geen eigen wachtwoordopslag of cryptografie. Activatie-/resetlinks zijn eigen eenmalige tokens (alleen hash opgeslagen); het wachtwoord zelf wordt via Better Auth ingesteld.
-- **Passen en tokens**: token = 256 bit uit de CSPRNG (base64url, 43 tekens, zonder betekenis). Opgeslagen als **HMAC-SHA256** (lookup) en **AES-256-GCM** (alleen levende passen, zodat QR/Wallet dezelfde token kunnen tonen; bij intrekking gewist). Unieke index op de hash; unieke index "één levende pas per lid".
+- **Passen en tokens**: token = 256 bit uit de CSPRNG (base64url, 43 tekens, zonder betekenis). Opgeslagen als **HMAC-SHA256** (lookup) en **AES-256-GCM** (alleen levende passen, zodat de QR dezelfde token kan tonen; bij intrekking gewist). Unieke index op de hash; unieke index "één levende pas per lid".
 - **Statusregels op één plek**: `src/lib/status.ts`. De database is de enige bron van waarheid; de scanner vraagt bij élke scan de server.
 - **Fail-safe scanner**: `src/lib/scan-view.ts` — alleen een exact verwacht 200-antwoord geeft GELDIG; elke fout, time-out of afwijking geeft "Niet gecontroleerd — verbinding nodig".
 - **E-mail**: transactionele outbox (`email_outbox`) met idempotente sleutels, begrensde retries en backoff; verzending pas ná de databasetransactie; Resend als provider; **testmodus** leidt alle mail om naar één adres.
@@ -44,7 +44,7 @@ Uitgangspunt is het **HHC-huisstijlhandboek 2024**; er is geen nieuwe huisstijl 
 | Basiskleuren **oranje `#ff6600` en zwart**, altijd als volle kleur, nooit als tint | Alle vlakken en knoppen; geen verlopen, geen lichtere oranjetinten (uitgeschakelde knoppen zijn grijs met een streeprand). Geen groen. |
 | Tekst-op-kleur-combinaties: zwart op oranje, oranje op zwart, wit op zwart, zwart op wit; **nooit oranje tekst op wit of grijs** | Knoppen: zwarte tekst op oranje. Oranje tekst alleen op zwart (header, pas, actieve tab). Lichtgrijs `#f2f2f2` alleen als pagina-achtergrond (zoals in het handboek). |
 | **DIN** (Light voor koppen, Regular voor tekst, Bold voor nadruk, Black voor krachtige woorden), koppen in hoofdletters | DIN Next LT Pro (Light/Regular/Medium/Bold) + FF DIN Black, zelf gehost (woff2). Koppen Light in hoofdletters, labels en knoppen Bold. |
-| **Logo**: schildvorm niet vervormen of herkleuren; een kwart logobreedte witruimte; minimaal 42 px breed | Het officiële PNG-logo staat in header, inlogschermen, de pas, e-mail, Wallet en app-iconen; altijd op zwart of oranje en met behoud van verhouding. |
+| **Logo**: schildvorm niet vervormen of herkleuren; een kwart logobreedte witruimte; minimaal 42 px breed | Het officiële PNG-logo staat in header, inlogschermen, de pas, e-mail en app-iconen; altijd op zwart of oranje en met behoud van verhouding. |
 | Beeldtaal: vlakke, stoere blokken in oranje/zwart met grote typografie | Zwarte header met oranje onderrand, zwarte pas-kaart met oranje kopstrook, harde randen, grote kopteksten. |
 
 **Samengevat per ervaring**
@@ -79,7 +79,7 @@ import_batch (tijdelijke preview, wordt na commit gewist) · app_rate_limit · r
 
 ## Rollen en rechten (minimale rechten)
 
-Zie de volledige autorisatiematrix in [docs/SECURITY.md](docs/SECURITY.md). Kort: **lid** (eigen gekoppelde passen), **scanner** (alleen scannen), **manager/ledenbeheer** (leden, passen, import, koppelingen, mailstatus + scannen), **sysadmin** (alles + personeel en audit). MFA is verplicht voor manager en sysadmin; optioneel voor scanner (`REQUIRE_MFA_SCANNER=true`).
+Zie de volledige autorisatiematrix in [docs/SECURITY.md](docs/SECURITY.md). Kort: **lid** (eigen gekoppelde passen), **scanner** (alleen scannen), **manager/ledenbeheer** (leden, passen, import, koppelingen, mailstatus + scannen), **sysadmin** (alles + accounts en audit). MFA is verplicht voor manager en sysadmin; optioneel voor scanner (`REQUIRE_MFA_SCANNER=true`).
 
 ## Statusregels pas
 
@@ -119,7 +119,7 @@ Voor Postgres: `TEST_ADMIN_DATABASE_URL` (standaard `postgres://postgres:postgre
 5. **Kies een EU-regio** voor zowel de Neon-database als de functies (`vercel.json` zet `fra1`).
 
 ### Eerste beheerder
-Zet `BOOTSTRAP_ADMIN_EMAIL` (alleen Production), deploy, en haal de eenmalige activatielink (24 uur) uit de buildlog. Stel een wachtwoord in en richt MFA in. Het adres wijzigen kan later onder *Beheer → Personeel*. Verwijder daarna de variabele.
+Zet `BOOTSTRAP_ADMIN_EMAIL` (alleen Production), deploy, en haal de eenmalige activatielink (24 uur) uit de buildlog. Stel een wachtwoord in en richt MFA in. Het adres wijzigen kan later onder *Beheer → Accounts*. Verwijder daarna de variabele.
 
 ### Auth
 Better Auth met e-mail+wachtwoord (min. 12 tekens), geen publieke registratie, sessies 24 uur (sliding, `HttpOnly`, `Secure`, `SameSite=Lax`), inlogpogingen begrensd (5 per 5 minuten per IP), TOTP-MFA met herstelcodes. Wachtwoordherstel stuurt alleen een eenmalige link (1 uur) met altijd dezelfde generieke bevestiging; bij een reset worden alle sessies ingetrokken.
@@ -127,26 +127,28 @@ Better Auth met e-mail+wachtwoord (min. 12 tekens), geen publieke registratie, s
 ### E-mail
 `EMAIL_MODE=test` (standaard): elke mail gaat naar `EMAIL_TEST_RECIPIENT` met prefix `[TEST]`. Om echt te versturen: verifieer een afzenderdomein bij Resend, zet `EMAIL_FROM`, `RESEND_API_KEY` en `EMAIL_MODE=live`. `disabled` verstuurt niets (status "uitgeschakeld" in Beheer).
 
-### Apple Wallet
-Vereist een **Apple Developer-account**: maak een *Pass Type ID*, een Pass Type ID-certificaat (CSR → `.cer`), exporteer certificaat + privésleutel naar PEM en download het *Apple WWDR G4-certificaat*. Zet base64 van de PEM-bestanden in `APPLE_SIGNER_CERT_BASE64`, `APPLE_SIGNER_KEY_BASE64`, `APPLE_WWDR_CERT_BASE64` (+ `APPLE_SIGNER_KEY_PASSPHRASE`), plus `APPLE_PASS_TYPE_ID` en `APPLE_TEAM_ID`. Zonder deze waarden is de knop uitgeschakeld en meldt het endpoint "nog niet ingericht". Raadpleeg de actuele Apple-documentatie (*Wallet Developer Guide*) voor certificaatverloop (Pass Type ID-certificaten verlopen jaarlijks).
+### Wallet
+Apple Wallet en Google Wallet worden **niet** gebruikt. Leden gebruiken de pas in de app; na inloggen kan een offline kopie op het toestel worden bewaard (zie Offline gebruik).
 
-### Google Wallet
-Maak een issuer-account in de *Google Pay & Wallet Console*, activeer de Google Wallet API, maak een service account (JSON-sleutel) en geef het toegang als issuer-gebruiker. Zet `GOOGLE_WALLET_ISSUER_ID` en `GOOGLE_WALLET_SERVICE_ACCOUNT_JSON_BASE64`. De applicatie maakt de *Generic*-klasse zelf aan en gebruikt een ondertekende "Opslaan in Google Wallet"-JWT. Tot de issuer-account is goedgekeurd werkt opslaan alleen voor testgebruikers.
+### Offline gebruik door leden
+Na inloggen bewaart de Ledenpas (met toestemming van het lid, aan/uit te zetten op het ledenscherm) een kopie van de eigen passen op het toestel, zodat de QR ook zonder internet te tonen is. De kopie verloopt na `OFFLINE_PASS_MAX_DAYS` (standaard 30, max 90), wordt bij elke online sessie ververst en bij uitloggen gewist. Een service worker (`/sw-ledenpas.js`) houdt de offline pagina en bestanden beschikbaar. Let op: een nieuw geïnstalleerde service worker neemt in sommige browsers pas na enkele seconden de pagina's over. De scanner blijft **altijd online** valideren, dus een ingetrokken pas wordt daar alsnog afgekeurd.
+
+### Zoeken door de scanner en controlelogboek
+Zonder pas kan de controleur een lid zoeken op naam of lidnummer (minimaal 3 tekens, maximaal 8 resultaten, begrensd per minuut). Het resultaat toont alleen naam, lidnummer en of er een actieve pas is. In Beheer staat onder **Controles** een doorzoekbaar controlelogboek (controleur, uitkomst, lid, periode); zoektermen worden niet vastgelegd. Op de pagina's *Controles* en *Audit* kiest u met knoppen per account wie u wilt inzien; ook vanuit *Accounts*.
 
 ### Demo-/testaccounts
 Met `SEED_DEMO=true` (Production) maakt de build bij de eerste keer drie demo-accounts met **synthetische gegevens** en willekeurige wachtwoorden: één ledenaccount met 1 pas, één met 3 passen en een testcontroleur. De wachtwoorden verschijnen **één keer** in de buildlog (verder niet opgeslagen); bestaande accounts blijven ongemoeid. `SEED_DEMO=reset` maakt nieuwe, `SEED_DEMO=remove` verwijdert alle demo-gegevens. **Verwijder de demo-accounts vóór echte leden worden ingevoerd** en laat de variabele niet staan: het zijn bekende accounts. Er wordt voor demo-accounts geen e-mail verstuurd.
 
 ### Overige configuratie
-`SCAN_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS`, `DELETED_MEMBER_RETENTION_DAYS`, `REQUIRE_MFA_SCANNER`, `DB_POOL_MAX` — zie `.env.example`.
+`SCAN_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS`, `DELETED_MEMBER_RETENTION_DAYS`, `REQUIRE_MFA_SCANNER`, `OFFLINE_PASS_MAX_DAYS`, `DB_POOL_MAX` — zie `.env.example`.
 
 ## Bewaartermijnen
 Standaard: scanlog 90 dagen · auditlog 730 dagen · verwijderde leden 90 dagen daarna definitief gewist (incl. passen en koppelingen) · tokens/importpreviews/rate-limit-rijen/sessies kort · verzonden mails 90 dagen. Dagelijkse opruimjob: `/api/cron/purge`. De club moet deze termijnen vaststellen.
 
 ## Bekende beperkingen
 - **Een statische QR kan worden gekopieerd** (screenshot, foto). Mitigatie: de scanner toont altijd naam en lidnummer ter vergelijking met een legitimatiebewijs, en een gelekte pas kan direct en definitief worden ingetrokken/heruitgegeven. Dit voorkomt screenshots **niet** volledig.
-- Wallet-passen zijn een offline weergave. Apple Wallet-passen worden niet automatisch bijgewerkt of ongeldig verklaard (geen pass-webservice); Google Wallet-objecten worden best-effort op INACTIVE gezet. **Intrekking wordt uitsluitend door de online scanner afgedwongen.**
+- De offline kopie op het toestel van een lid wordt niet op afstand ongeldig; **intrekking wordt uitsluitend door de online scanner afgedwongen.** De kopie bevat de pastoken in `localStorage` van de browser (zie docs/SECURITY.md).
 - Sleutels niet roteren zonder plan: een nieuwe `TOKEN_HMAC_KEY` maakt alle passen onbekend, een nieuwe `TOKEN_ENC_KEY` maakt opgeslagen tokens onleesbaar (passen tonen dan "tijdelijk niet beschikbaar" tot heruitgifte).
-- App-iconen, favicon, e-mail- en Wallet-afbeeldingen worden uit het logo gegenereerd: `node scripts/make-icons.mjs brand-source/HHC_ClubSupport_Logo_RGB.png` (vereist Chromium via Playwright). Het bronbestand staat in `brand-source/`.
+- App-iconen, favicon, en e-mailafbeeldingen worden uit het logo gegenereerd: `node scripts/make-icons.mjs brand-source/HHC_ClubSupport_Logo_RGB.png` (vereist Chromium via Playwright). Het bronbestand staat in `brand-source/`.
 - DIN-fonts zijn door HHC aangeleverd; controleer of de licentie webgebruik dekt.
-- Niet getest op een echt iOS-/Android-toestel en niet met echte Apple-/Google-/Resend-accounts; zie [docs/TESTING.md](docs/TESTING.md).
-- Het ledenscherm biedt geen offline-opslag van de pas in de PWA (privacy); offline gebruik gaat via Wallet.
+- Niet getest op een echt iOS-/Android-toestel en niet met een echt Resend-account; zie [docs/TESTING.md](docs/TESTING.md).

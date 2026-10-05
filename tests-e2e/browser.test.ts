@@ -99,6 +99,34 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await ctx.close();
   });
 
+  it("zoeken op naam en lidnummer: status per lid; zonder verbinding niet gecontroleerd", async () => {
+    const { ctx, page } = await scannerPage("Pixel 5");
+    await page.fill("#q", "ann");
+    await page.click("button:has-text('Zoeken')");
+    await page.waitForSelector("text=PAS ACTIEF");
+    expect(await page.locator("ul li").first().innerText()).toContain("Anna 21");
+    expect(await page.locator("ul li").first().innerText()).toContain("T21");
+    await shot(page, "scanner-zoeken");
+    await page.fill("#q", "T21");
+    await page.click("button:has-text('Zoeken')");
+    await page.waitForSelector("li:has-text('T21')");
+    await page.fill("#q", "niemandbestaat");
+    await page.click("button:has-text('Zoeken')");
+    await page.waitForSelector("text=Geen lid gevonden");
+    // fout/offline: nooit een status tonen
+    await page.route("**/api/scan/lookup", (r) => r.abort("internetdisconnected"));
+    await page.fill("#q", "anna");
+    await page.click("button:has-text('Zoeken')");
+    await page.waitForSelector("text=NIET GECONTROLEERD");
+    expect(await page.locator("text=PAS ACTIEF").count()).toBe(0);
+    await page.unroute("**/api/scan/lookup");
+    await page.route("**/api/scan/lookup", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, tooMany: false, results: [{ name: "X", memberNumber: "1", pass: "valid" }] }) }));
+    await page.fill("#q", "anna");
+    await page.click("button:has-text('Zoeken')");
+    await page.waitForSelector("text=NIET GECONTROLEERD");
+    await ctx.close();
+  });
+
   it("gedeactiveerd en onbekend: ONGELDIG met aparte meldingen", async () => {
     const { deactivatePass, reactivatePass } = await import("@/server/passes");
     const { ctx, page } = await scannerPage("iPhone 13");
@@ -298,6 +326,10 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
       const ps = await sc.newPage();
       await login(ps, "scanner", "scn@example.test");
       await check(ps, `${tag} scanner`);
+      await ps.fill("#q", "anna");
+      await ps.click("button:has-text('Zoeken')");
+      await ps.waitForSelector("li:has-text('PAS ')");
+      await check(ps, `${tag} scanner zoekresultaat`);
       await ps.fill("#code", "A".repeat(43));
       await ps.click("button:has-text('Controleren')");
       await ps.waitForSelector("section[role=alert]");
@@ -323,5 +355,108 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
       await bh.close();
     }
     expect(problems, problems.join("\n")).toEqual([]);
+  });
+
+  it("ledenpas offline kopie (online gedrag): opslaan, verversen bij online bezoek, verlopen, aan/uit en wissen bij uitloggen", async () => {
+    await resetLoginLimit();
+    const ctx = await browser.newContext({ ...devices["Pixel 5"], reducedMotion: "reduce" });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/ledenpas/inloggen`);
+    await page.fill("#email", "fam@example.test");
+    await page.fill("#password", "een-lang-wachtwoord-1");
+    await page.click("button:has-text('Inloggen')");
+    await page.waitForURL("**/ledenpas");
+    await page.waitForSelector(".carousel .slide");
+    await page.waitForFunction(() => !!localStorage.getItem("hhc-ledenpas-offline-v1"));
+    const stored = JSON.parse((await page.evaluate(() => localStorage.getItem("hhc-ledenpas-offline-v1")))!);
+    expect(stored.items.map((i: { name: string }) => i.name)).toEqual(["Derde Pas", "Eerste Pas", "Tweede Pas"]);
+    expect(JSON.stringify(stored)).not.toMatch(/@|fam@example/); // geen e-mailadres in de kopie
+
+    // online verversen: een gedeactiveerde pas is daarna geen actieve pas (zonder QR) in de kopie
+    const { db, schema } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const { deactivatePass, reactivatePass } = await import("@/server/passes");
+    const [row] = await db.select().from(schema.member).where(eq(schema.member.fullName, "Eerste Pas"));
+    const [p] = await db.select().from(schema.pass).where(eq(schema.pass.memberId, row.id));
+    await deactivatePass(p.id, "adm", "test");
+    await page.goto(`${BASE}/ledenpas`);
+    await page.waitForFunction(() => { const d = JSON.parse(localStorage.getItem("hhc-ledenpas-offline-v1") || "{}"); return d.items?.find((i: { name: string; active: boolean; svg: string | null }) => i.name === "Eerste Pas" && !i.active && i.svg === null); }, null, { timeout: 10000 });
+    await reactivatePass(p.id, "adm", "terug");
+
+    // verlopen kopie wordt niet getoond en gewist
+    await page.evaluate(() => { const d = JSON.parse(localStorage.getItem("hhc-ledenpas-offline-v1")!); d.savedAt = Date.now() - 40 * 86400_000; localStorage.setItem("hhc-ledenpas-offline-v1", JSON.stringify(d)); });
+    await page.goto(`${BASE}/ledenpas/offline`);
+    await page.waitForSelector("text=Offline kopie verlopen");
+    expect(await page.evaluate(() => localStorage.getItem("hhc-ledenpas-offline-v1"))).toBeNull();
+
+    // uitzetten wist de kopie en blijft uit; aanzetten bewaart weer
+    await page.goto(`${BASE}/ledenpas`);
+    await page.waitForFunction(() => !!localStorage.getItem("hhc-ledenpas-offline-v1"));
+    await page.uncheck("input[type=checkbox]");
+    expect(await page.evaluate(() => localStorage.getItem("hhc-ledenpas-offline-v1"))).toBeNull();
+    await page.reload();
+    await page.waitForSelector(".carousel .slide");
+    expect(await page.evaluate(() => localStorage.getItem("hhc-ledenpas-offline-v1"))).toBeNull();
+    await page.check("input[type=checkbox]");
+    await page.waitForFunction(() => !!localStorage.getItem("hhc-ledenpas-offline-v1"));
+
+    // uitloggen wist de kopie
+    await page.click("button:has-text('Uitloggen')");
+    await page.waitForURL("**/ledenpas/inloggen");
+    expect(await page.evaluate(() => localStorage.getItem("hhc-ledenpas-offline-v1"))).toBeNull();
+    await ctx.close();
+  });
+
+  // LET OP: deze test moet de LAATSTE in dit bestand blijven: hij stopt de server om echt offline te zijn.
+  it("ledenpas zonder internet: na inloggen blijven de passen bekijkbaar (server uitgeschakeld)", async () => {
+    await resetLoginLimit();
+    const ctx = await browser.newContext({ ...devices["Pixel 5"], reducedMotion: "reduce" });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/ledenpas/inloggen`);
+    await page.fill("#email", "fam@example.test");
+    await page.fill("#password", "een-lang-wachtwoord-1");
+    await page.click("button:has-text('Inloggen')");
+    await page.waitForURL("**/ledenpas");
+    await page.waitForSelector(".carousel .slide");
+    // service worker actief, offline-pagina + bestanden in de cache, kopie opgeslagen
+    await page.waitForFunction(async () => {
+      const reg = await navigator.serviceWorker.getRegistration("/ledenpas");
+      if (reg?.active?.state !== "activated" || !navigator.serviceWorker.controller) return false; // echt actief en pagina onder controle
+      const c = await caches.open("ledenpas-shell-v2");
+      const keys = await c.keys();
+      // de eindmarkering wordt pas gezet als de offline-pagina én alle bestanden zijn opgehaald
+      return keys.some((k) => k.url.endsWith("/__offline-stamp")) && keys.some((k) => k.url.endsWith("/ledenpas/offline")) && !!localStorage.getItem("hhc-ledenpas-offline-v1");
+    }, null, { timeout: 20000, polling: 500 });
+
+    // Chromium neemt navigaties van een nieuwe service worker pas na een paar seconden over (gemeten: 0/3 zonder, 3/3 met 3 s wachten).
+    await page.waitForTimeout(3000);
+    // server stoppen = echt geen verbinding
+    if (server?.pid) process.kill(-server.pid, "SIGTERM");
+    for (let i = 0; i < 40; i++) {
+      try {
+        await fetch(`${BASE}/api/health`);
+      } catch {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    await page.goto(`${BASE}/ledenpas`);
+    await page.waitForSelector("text=Je bent offline", { timeout: 15000 });
+    expect(await page.locator(".carousel .slide").count()).toBe(3);
+    expect(await page.locator(".slide .pass-qr svg").count()).toBe(3);
+    expect(await page.locator("text=Derde Pas").count()).toBeGreaterThan(0);
+    await shot(page, "ledenpas-offline");
+    // het lettertype en logo komen uit de cache; geen horizontale scroll
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const faces = await page.evaluate(async () => {
+      const a = await document.fonts.load("400 16px DIN");
+      const b = await document.fonts.load("300 24px DIN");
+      return a.length + b.length;
+    });
+    expect(faces, "DIN-lettertype uit de cache geladen").toBeGreaterThan(0);
+    // de inlog-URL valt ook veilig terug (kopie staat er nog)
+    await page.goto(`${BASE}/ledenpas/inloggen`);
+    await page.waitForSelector("text=Je bent offline");
+    await ctx.close();
   });
 });

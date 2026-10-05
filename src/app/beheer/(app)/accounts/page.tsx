@@ -1,9 +1,10 @@
+import Link from "next/link";
 import { Flash, PageTitle } from "@/components/ui";
 import { requireStaff } from "@/lib/session";
 import { listStaff } from "@/server/admin";
 import { changeRoleAction, changeStaffEmailAction, createStaffAction, resendStaffInviteAction, toggleStaffAction } from "../actions";
 
-export const metadata = { title: "Personeel" };
+export const metadata = { title: "Accounts" };
 const ROLE: Record<string, string> = { scanner: "Scanner (alleen scannen)", manager: "Ledenbeheer (leden en passen)", sysadmin: "Systeembeheer" };
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ msg?: string; err?: string }> }) {
@@ -12,7 +13,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
   const staff = await listStaff();
   return (
     <>
-      <PageTitle title="Personeel" sub="Elke medewerker meldt zich persoonlijk aan. Beheer- en controleursrollen horen nooit bij een gedeeld account. MFA is verplicht voor Ledenbeheer en Systeembeheer." />
+      <PageTitle title="Accounts"  sub="Accounts van beheerders en controleurs. Elke medewerker meldt zich persoonlijk aan. Beheer- en controleursrollen horen nooit bij een gedeeld account. MFA is verplicht voor Ledenbeheer en Systeembeheer." />
       <Flash msg={sp.msg} err={sp.err} />
       <form action={createStaffAction} className="card" aria-labelledby="n">
         <h2 id="n">Staf-account aanmaken</h2>
@@ -39,6 +40,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
             </form>
           </div>
           <div className="row" style={{ marginTop: 8 }}>
+            <Link className="btn secondary small" href={`/beheer/controlelogboek?scanner=${u.id}`}>Controles</Link>
+            <Link className="btn secondary small" href={`/beheer/audit?actor=${u.id}`}>Auditlog</Link>
             {!u.activated && <form action={resendStaffInviteAction}><input type="hidden" name="userId" value={u.id} /><button className="secondary">Uitnodiging opnieuw versturen</button></form>}
             {u.id !== s.user.id && <form action={toggleStaffAction}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="disable" value={u.disabledAt ? "0" : "1"} /><button className={u.disabledAt ? "secondary" : "danger"}>{u.disabledAt ? "Weer activeren" : "Blokkeren"}</button></form>}
           </div>

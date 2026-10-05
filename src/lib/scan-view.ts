@@ -35,3 +35,33 @@ export function interpretScan(status: number | null, body: unknown): ScanView {
       return { kind: "unchecked" };
   }
 }
+
+/**
+ * Zoekresultaten voor de controleur. Fail-safe zoals bij scannen: alleen een exact verwacht 200-antwoord geeft
+ * resultaten; elke fout/afwijking is "unchecked" (Niet gecontroleerd — verbinding nodig).
+ */
+export type LookupView =
+  | { kind: "results"; results: { name: string; memberNumber: string; pass: "active" | "deactivated" | "none" }[] }
+  | { kind: "tooMany" }
+  | { kind: "invalid" }
+  | { kind: "wait" }
+  | { kind: "session" }
+  | { kind: "unchecked" };
+
+export function interpretLookup(status: number | null, body: unknown): LookupView {
+  if (status === null) return { kind: "unchecked" };
+  if (status === 401 || status === 403) return { kind: "session" };
+  if (status === 429) return { kind: "wait" };
+  if (status === 400) return { kind: "invalid" };
+  if (status !== 200 || !body || typeof body !== "object") return { kind: "unchecked" };
+  const b = body as { ok?: unknown; tooMany?: unknown; results?: unknown };
+  if (b.ok !== true) return { kind: "unchecked" };
+  if (b.tooMany === true) return { kind: "tooMany" };
+  if (b.tooMany !== false || !Array.isArray(b.results) || b.results.length > 8) return { kind: "unchecked" };
+  const out: { name: string; memberNumber: string; pass: "active" | "deactivated" | "none" }[] = [];
+  for (const r of b.results as Record<string, unknown>[]) {
+    if (!r || !isStr(r.name) || !isStr(r.memberNumber) || !(r.pass === "active" || r.pass === "deactivated" || r.pass === "none")) return { kind: "unchecked" };
+    out.push({ name: r.name, memberNumber: r.memberNumber, pass: r.pass });
+  }
+  return { kind: "results", results: out };
+}

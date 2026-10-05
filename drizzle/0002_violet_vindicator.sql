@@ -1,0 +1,1 @@
+ALTER TABLE "pass" DROP COLUMN "google_object_id";

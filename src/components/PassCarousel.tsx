@@ -9,8 +9,6 @@ export type PassItem = {
   active: boolean;
   svg: string | null; // zelf gegenereerde QR-SVG (geen gebruikersinvoer)
   unavailable: boolean;
-  apple: boolean;
-  google: boolean;
 };
 
 /** Veegbare carrousel (native scroll-snap) met pijlen, stippen en toetsenbordbediening. */
@@ -87,17 +85,6 @@ export function PassCarousel({ items }: { items: PassItem[] }) {
                   </p>
                 )}
               </div>
-              {p.svg && (
-                <div className="pass-foot">
-                  {p.apple ? <a className="btn" href={`/api/wallet/apple/${p.id}`}>Toevoegen aan Apple Wallet</a> : <button disabled aria-describedby={`w-${p.id}`}>Apple Wallet</button>}
-                  {p.google ? <a className="btn secondary" href={`/api/wallet/google/${p.id}`}>Opslaan in Google Wallet</a> : <button disabled aria-describedby={`w-${p.id}`}>Google Wallet</button>}
-                  {(!p.apple || !p.google) && (
-                    <p id={`w-${p.id}`} className="muted" style={{ color: "#bbb", margin: 0, fontSize: ".9rem", textAlign: "center" }}>
-                      {!p.apple && !p.google ? "Apple Wallet en Google Wallet zijn nog niet beschikbaar." : !p.apple ? "Apple Wallet is nog niet beschikbaar." : "Google Wallet is nog niet beschikbaar."}
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           </article>
         ))}

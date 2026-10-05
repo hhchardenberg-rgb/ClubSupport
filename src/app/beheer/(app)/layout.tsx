@@ -12,7 +12,8 @@ export default async function BeheerLayout({ children }: { children: React.React
     { href: "/beheer", label: "Overzicht" },
     { href: "/beheer/leden", label: "Leden" },
     ...(can(role, "import") ? [{ href: "/beheer/import", label: "Import" }] : []),
-    ...(can(role, "staff.manage") ? [{ href: "/beheer/personeel", label: "Personeel" }] : []),
+    ...(can(role, "scanlog.read") ? [{ href: "/beheer/controlelogboek", label: "Controles" }] : []),
+    ...(can(role, "staff.manage") ? [{ href: "/beheer/accounts", label: "Accounts" }] : []),
     ...(can(role, "audit.read") ? [{ href: "/beheer/audit", label: "Audit" }] : []),
   ];
   return (

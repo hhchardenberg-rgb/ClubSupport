@@ -161,3 +161,24 @@ tbody tr:hover{background:#fafafa}
 .table-wrap td.wrap{white-space:normal;min-width:220px}
 .card h3{margin-top:1.4em}
 .card>h3:first-child{margin-top:0}
+
+/* app-gevoel: de pagina schuift niet zijdelings mee; alleen de pas-carrousel scrolt horizontaal */
+html{overflow-x:clip;overscroll-behavior-x:none;max-width:100%}
+body{overflow-x:clip;overscroll-behavior-x:none;max-width:100%;min-height:100dvh;touch-action:pan-y pinch-zoom;-webkit-tap-highlight-color:transparent}
+.carousel{touch-action:pan-x pan-y pinch-zoom;overscroll-behavior-x:contain}
+.site-nav{touch-action:pan-x pan-y pinch-zoom;overscroll-behavior-x:contain}
+.table-wrap{touch-action:pan-x pan-y pinch-zoom;overscroll-behavior-x:contain}
+button,.btn,.site-header a,.dot{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+img,svg{-webkit-user-drag:none}
+/* veilige zones (notch/home-indicator) in de geïnstalleerde app */
+main{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));padding-bottom:max(56px,calc(env(safe-area-inset-bottom) + 24px))}
+.site-header .in{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+@media (max-width:520px){main{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}}
+
+/* keuzeknoppen (chips) voor snel filteren, bijv. per controleur */
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.chip{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:6px 14px;border:2px solid var(--black);border-radius:99px;background:var(--white);color:var(--black);font-weight:700;text-decoration:none}
+.chip:hover{background:var(--black);color:var(--white)}
+.chip[aria-current="true"]{background:var(--orange);color:var(--black)}
+.chip-n{display:inline-block;min-width:24px;padding:0 6px;border-radius:99px;background:var(--black);color:var(--white);font-size:.8rem;text-align:center}
+.chip[aria-current="true"] .chip-n{background:var(--black);color:var(--orange)}

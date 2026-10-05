@@ -15,6 +15,20 @@
       "when": 1791235631053,
       "tag": "0001_jittery_outlaw_kid",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791240565957,
+      "tag": "0002_violet_vindicator",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791240685129,
+      "tag": "0003_true_mercury",
+      "breakpoints": true
     }
   ]
 }

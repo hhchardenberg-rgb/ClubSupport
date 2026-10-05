@@ -133,7 +133,7 @@ export const pass = pgTable(
       .references(() => member.id, { onDelete: "cascade" }),
     /** HMAC-SHA256(token) hex. Uniek: een token bestaat nooit dubbel. */
     tokenHash: text("token_hash").notNull().unique(),
-    /** AES-256-GCM-versleutelde token, alleen voor live passen (Wallet/QR). Wordt bij intrekking gewist. */
+    /** AES-256-GCM-versleutelde token, alleen voor live passen (QR). Wordt bij intrekking gewist. */
     tokenCiphertext: text("token_ciphertext"),
     status: text("status").notNull().default("active"), // active | deactivated | revoked
     issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
@@ -143,7 +143,6 @@ export const pass = pgTable(
     revocationReason: text("revocation_reason"),
     statusNote: text("status_note"),
     replacedByPassId: uuid("replaced_by_pass_id"),
-    googleObjectId: text("google_object_id"),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   },
   (t) => [
@@ -245,9 +244,11 @@ export const scanEvent = pgTable(
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
     scannerUserId: text("scanner_user_id").notNull(),
     passId: uuid("pass_id"), // geen FK, geen ruwe token
-    outcome: text("outcome").notNull(), // valid | inactive | revoked | unknown | rate_limited
+    outcome: text("outcome").notNull(), // valid | inactive | revoked | unknown | rate_limited | lookup
+    /** Alleen bij zoekopdrachten: aantal gevonden leden (de zoekterm zelf wordt niet bewaard). */
+    resultCount: integer("result_count"),
   },
-  (t) => [index("scan_at_idx").on(t.at)],
+  (t) => [index("scan_at_idx").on(t.at), index("scan_scanner_idx").on(t.scannerUserId, t.at)],
 );
 
 export const importBatch = pgTable("import_batch", {

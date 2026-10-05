@@ -109,7 +109,7 @@ export async function reissuePass(memberId: string, actor: string, reason: "reis
       { actor, action: "pass.reissue", targetType: "pass", targetId: newId, metadata: { memberId, reason, note: n, revokedPassIds: live.map((l) => l.id) } },
       tx,
     );
-    return { passId: newId, revokedPassIds: live.map((l) => l.id), googleObjectIds: live.map((l) => l.googleObjectId).filter(Boolean) as string[] };
+    return { passId: newId, revokedPassIds: live.map((l) => l.id) };
   });
 }
 
@@ -130,7 +130,7 @@ export async function deleteMember(memberId: string, actor: string, note: string
   });
 }
 
-/** Ruwe token van een levende pas, voor QR/Wallet van de rechthebbende. Nooit loggen. */
+/** Ruwe token van een levende pas, voor de QR van de rechthebbende. Nooit loggen. */
 export function revealToken(p: { id: string; tokenCiphertext: string | null; status: string }): string | null {
   if (p.status === "revoked" || !p.tokenCiphertext) return null;
   return decryptToken(p.tokenCiphertext, p.id);
@@ -172,4 +172,42 @@ export async function scanToken(rawToken: unknown, scannerUserId: string): Promi
   await db.insert(scanEvent).values({ scannerUserId, passId: row.id, outcome });
   if (outcome === "valid" || outcome === "inactive") return { outcome, name: row.name, memberNumber: row.number };
   return { outcome: "revoked" }; // definitief ingetrokken/verwijderd: geen persoonsgegevens
+}
+
+export type LookupResult =
+  | { ok: true; results: { name: string; memberNumber: string; pass: "active" | "deactivated" | "none" }[]; tooMany: false }
+  | { ok: true; results: []; tooMany: true }
+  | { ok: false; reason: "invalid" | "rate_limited" };
+
+export const LOOKUP_MIN_CHARS = 3;
+export const LOOKUP_MAX_RESULTS = 8;
+
+/**
+ * Beperkte ledenzoekfunctie voor de controleur (lid heeft de pas niet bij zich).
+ * Bewust smal: zoekterm minimaal 3 tekens (of een exact lidnummer), maximaal 8 resultaten (anders "te veel
+ * resultaten", dus geen lijst op te vragen), alleen naam + lidnummer + passtatus — geen e-mail of andere gegevens.
+ * Verwijderde leden worden nooit getoond. De zoekterm wordt niet gelogd; wel dat er gezocht is.
+ */
+export async function lookupMembers(rawQuery: unknown, scannerUserId: string): Promise<LookupResult> {
+  if (!(await rateLimit(`lookup:user:${scannerUserId}`, 30, 60))) return { ok: false, reason: "rate_limited" };
+  const q = typeof rawQuery === "string" ? rawQuery.trim().replace(/\s+/g, " ") : "";
+  // eslint-disable-next-line no-control-regex
+  if (q.length < 1 || q.length > 60 || /[\u0000-\u001F\u007F]/.test(q)) return { ok: false, reason: "invalid" };
+  const esc = q.replace(/[\\%_]/g, (m) => "\\" + m);
+  const byNumber = sql`lower(${member.memberNumber}) = lower(${q})`;
+  const fuzzy = q.length >= LOOKUP_MIN_CHARS ? sql` or ${member.memberNumber} ilike ${esc + "%"} or ${member.fullName} ilike ${"%" + esc + "%"}` : sql``;
+  const rows = await db
+    .select({ name: member.fullName, memberNumber: member.memberNumber, passStatus: pass.status })
+    .from(member)
+    .leftJoin(pass, and(eq(pass.memberId, member.id), sql`${pass.status} in ('active','deactivated')`))
+    .where(and(sql`${member.deletedAt} is null`, sql`(${byNumber}${fuzzy})`))
+    .orderBy(member.fullName)
+    .limit(LOOKUP_MAX_RESULTS + 1);
+  await db.insert(scanEvent).values({ scannerUserId, outcome: "lookup", resultCount: rows.length });
+  if (rows.length > LOOKUP_MAX_RESULTS) return { ok: true, results: [], tooMany: true };
+  return {
+    ok: true,
+    tooMany: false,
+    results: rows.map((r) => ({ name: r.name, memberNumber: r.memberNumber, pass: r.passStatus === "active" ? "active" : r.passStatus === "deactivated" ? "deactivated" : "none" })),
+  };
 }

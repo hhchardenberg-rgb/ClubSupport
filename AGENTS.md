@@ -13,6 +13,7 @@ Taal van de interface en documentatie: **Nederlands**. Namen consequent: **HHC C
 - Service workers (`public/sw-*.js`) cachen nooit `/api/*`, pagina's met ledengegevens of scanresultaten.
 - Wijzig bestaande migraties in `drizzle/` nooit; genereer een nieuwe (`npx drizzle-kit generate`).
 - Gebruik geen groen in de UI; alleen HHC-oranje `#ff6600`, zwart, wit/grijs (rood alleen voor fouten/onomkeerbare acties). Oranje nooit als tint en nooit als tekst op wit/grijs.
+- Scanner-zoeken (`lookupMembers`) blijft beperkt: min. 3 tekens, max. 8 resultaten, alleen naam/lidnummer/passtatus, zoekterm nooit loggen.
 - Geen secrets in de repository; alleen namen in `.env.example`.
 
 - Gebruik de gedeelde UI-onderdelen (`src/components/ui.tsx`, `Logo`, `SiteHeader`, `AuthShell`) en de klassen in `globals.css`; maak geen losse stijlen per pagina. Het logo komt uit `src/lib/brand.generated.ts` (script `scripts/make-icons.mjs`); teken of kleur het logo nooit zelf.

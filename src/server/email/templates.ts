@@ -1,7 +1,7 @@
 import { env } from "@/lib/env";
 import { BRAND } from "@/lib/brand.generated";
 
-/** Korte, minimale mails. Geen QR-token, geen wallet-bestand, geen wachtwoord. */
+/** Korte, minimale mails. Geen QR-token, geen bijlage, geen wachtwoord. */
 export type Mail = { subject: string; text: string; html: string };
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
