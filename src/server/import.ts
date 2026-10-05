@@ -87,3 +87,23 @@ export async function commitImport(actor: string, batchId: string, opts: { confi
   await processOutbox(50).catch(() => undefined); // pas na commit mailen
   return result;
 }
+
+/** Preview opnieuw tonen; alleen voor de uploader en zolang de batch niet is verwerkt of verlopen. */
+export async function getBatchPreview(actor: string, batchId: string): Promise<Preview | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(batchId)) return null;
+  const [b] = await db.select().from(schema.importBatch).where(eq(schema.importBatch.id, batchId));
+  if (!b || b.createdBy !== actor || b.committedAt || !b.rows || b.expiresAt < new Date()) return null;
+  const rows = b.rows as PreviewRow[];
+  const byGroup = new Map<number, PreviewRow[]>();
+  for (const r of rows) if (r.group !== undefined && r.status === "import") byGroup.set(r.group, [...(byGroup.get(r.group) ?? []), r]);
+  const groups: PreviewGroup[] = [...byGroup.entries()].map(([id, rs]) => ({ id, email: rs[0].email, lines: rs.map((r) => r.line), existingAccount: false, existingMembers: 0 }));
+  const existing = groups.length ? await db.select({ email: schema.user.email, id: schema.user.id }).from(schema.user).where(inArray(schema.user.email, groups.map((g) => g.email))) : [];
+  for (const g of groups) {
+    const u = existing.find((e) => e.email === g.email);
+    if (u) {
+      g.existingAccount = true;
+      g.existingMembers = Number((await db.execute(sql`select count(*) as c from account_member_access where user_id = ${u.id} and revoked_at is null`)).rows[0].c);
+    }
+  }
+  return { batchId, rows, groups, counts: b.counts as Preview["counts"] };
+}

@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "next build && vitest run -c vitest.e2e.config.ts"
   },
   "dependencies": {
     "better-auth": "^1.7.7",
