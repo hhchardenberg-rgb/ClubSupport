@@ -1,0 +1,122 @@
+# HHC ClubSupport — Ledenpas, Scanner en Beheer
+
+Digitale ledenpas voor supportersvereniging HHC ClubSupport (HHC Hardenberg). Eén applicatie met drie gescheiden ervaringen op één backend:
+
+| Ervaring | Adres | Doelgroep | Installeerbaar als app |
+|---|---|---|---|
+| **Ledenpas** | `/` (stuurt door naar `/ledenpas`) | leden | ja ("HHC ClubSupport Ledenpas") |
+| **Scanner** | `/scanner` (niet gelinkt vanaf de ledenkant) | controleurs en beheerders | ja ("HHC ClubSupport Scanner", eigen icoon) |
+| **Beheer** | `/beheer` (niet gelinkt vanaf de ledenkant) | beheerders | nee |
+
+> Dit project claimt **geen** formele certificering. OWASP ASVS 5.0.0 is gebruikt als verificatiekader; zie [docs/SECURITY.md](docs/SECURITY.md) voor wat getest is en wat nog open staat.
+
+## Aannames (zichtbaar vastgelegd, door de club aan te passen)
+
+1. Een beheerder voert leden handmatig in of importeert ze via CSV; er is geen openbare zelfregistratie.
+2. Eén lid heeft maximaal één levende pas (actief of gedeactiveerd); heruitgifte trekt de vorige pas definitief in.
+3. Een pas blijft geldig totdat een bevoegde beheerder die deactiveert, intrekt of het lid verwijdert. **Geen** automatische vervaldatum, betaalintegratie of ledenstatus die de geldigheid beïnvloedt.
+4. De scanner toont geldigheid, naam en lidnummer — geen foto of overige contactgegevens.
+5. Een scan vereist een werkende internetverbinding.
+6. De onboardingmail gaat naar het door de beheerder ingevoerde adres; het lid stelt bij eerste gebruik zelf een wachtwoord in.
+7. Eén geverifieerd account kan meerdere leden en passen bevatten. Bij gedeelde e-mailadressen toont de applicatie de groepering ter bevestiging; alleen expliciet gekoppelde leden zijn zichtbaar.
+8. Overige velden, rollen en bewaartermijnen zijn configureerbaar tot de club ze vaststelt (zie [Bewaartermijnen](#bewaartermijnen)).
+
+Extra keuzes die ik heb gemaakt: *gedeactiveerd* is tijdelijk en heractiveerbaar (zelfde QR), *definitief ingetrokken* is onomkeerbaar. Voor een ingetrokken of verwijderde pas toont de scanner **geen** naam (dataminimalisatie); voor een gedeactiveerde pas wél naam en lidnummer, zodat de controleur kan handelen.
+
+## Stack en architectuurbeslissingen
+
+- **Next.js 16 (App Router, TypeScript)** op **Vercel**; **Postgres (Neon)** via **Drizzle ORM** met SQL-migraties in `drizzle/` (reproduceerbaar; draaien automatisch bij productie-deploys).
+- **Better Auth** is de identity provider (wachtwoord-hashing, sessies, TOTP-MFA). Er is geen eigen wachtwoordopslag of cryptografie. Activatie-/resetlinks zijn eigen eenmalige tokens (alleen hash opgeslagen); het wachtwoord zelf wordt via Better Auth ingesteld.
+- **Passen en tokens**: token = 256 bit uit de CSPRNG (base64url, 43 tekens, zonder betekenis). Opgeslagen als **HMAC-SHA256** (lookup) en **AES-256-GCM** (alleen levende passen, zodat QR/Wallet dezelfde token kunnen tonen; bij intrekking gewist). Unieke index op de hash; unieke index "één levende pas per lid".
+- **Statusregels op één plek**: `src/lib/status.ts`. De database is de enige bron van waarheid; de scanner vraagt bij élke scan de server.
+- **Fail-safe scanner**: `src/lib/scan-view.ts` — alleen een exact verwacht 200-antwoord geeft GELDIG; elke fout, time-out of afwijking geeft "Niet gecontroleerd — verbinding nodig".
+- **E-mail**: transactionele outbox (`email_outbox`) met idempotente sleutels, begrensde retries en backoff; verzending pas ná de databasetransactie; Resend als provider; **testmodus** leidt alle mail om naar één adres.
+- **PWA**: aparte manifesten en service workers voor Ledenpas en Scanner. Service workers cachen alleen de app-shell/statische bestanden en een neutrale offline-pagina — nooit API-antwoorden, ledengegevens of scanresultaten.
+- **Beveiliging**: CSP met nonce per verzoek (alle pagina's dynamisch gerenderd), strikte security headers, `no-store` op alle pagina's, Origin-controle op eigen POST-routes, Postgres-rate-limiter, regio `fra1` voor functies.
+- **Huisstijl**: HHC-huisstijlhandboek 2024 — oranje `#ff6600` en zwart als volle kleur (geen tinten, geen groen), DIN Next LT Pro + FF DIN Black.
+
+## Datamodel
+
+```
+user (Better Auth)  1─n  account_member_access  n─1  member  1─n  pass
+   │ role: member | scanner | manager | sysadmin         │ memberNumber (uniek), fullName, email, membershipNote, deletedAt
+   │ twoFactorEnabled, disabledAt                          └ pass: tokenHash (uniek), tokenCiphertext, status, revocationReason, …
+   ├── account_token   (activation | reset; alleen hash; verloopt; eenmalig)
+   ├── email_outbox    (kind, status, attempts, providerRef; géén tokens/wachtwoorden)
+   ├── audit_event     (actor, actie, doel, beperkte metadata — nooit tokens/wachtwoorden)
+   └── scan_event      (controleur, tijdstip, uitkomst, pasreferentie — nooit de ruwe token)
+import_batch (tijdelijke preview, wordt na commit gewist) · app_rate_limit · rate_limit (Better Auth)
+```
+
+`Member` ≠ `Pass`: het lid is de persoon, de pas het uitgegeven token. `account_member_access` is de expliciete autorisatierelatie (met wie koppelde/ontkoppelde en wanneer); e-mailgelijkheid koppelt nooit automatisch.
+
+## Rollen en rechten (minimale rechten)
+
+Zie de volledige autorisatiematrix in [docs/SECURITY.md](docs/SECURITY.md). Kort: **lid** (eigen gekoppelde passen), **scanner** (alleen scannen), **manager/ledenbeheer** (leden, passen, import, koppelingen, mailstatus + scannen), **sysadmin** (alles + personeel en audit). MFA is verplicht voor manager en sysadmin; optioneel voor scanner (`REQUIRE_MFA_SCANNER=true`).
+
+## Statusregels pas
+
+`active` → `deactivated` (reden verplicht, heractiveerbaar) · `active|deactivated` → `revoked` (definitief; via intrekken, heruitgifte of verwijderen van het lid). `revoked` heeft geen uitgaande overgangen en de versleutelde token wordt gewist.
+
+## Lokaal starten
+
+Vereist Node 22 en Postgres 16.
+
+```bash
+npm ci
+cp .env.example .env.local        # vul DATABASE_URL en de drie secrets (zie commentaar in het bestand)
+createdb clubsupport_dev
+set -a; . ./.env.local; set +a    # scripts (tsx) lezen .env.local niet zelf; `next dev` wel
+npx tsx scripts/migrate.ts        # migraties toepassen
+BOOTSTRAP_ADMIN_EMAIL=jij@example.test npx tsx scripts/bootstrap-admin.ts   # eerste beheerder: activatielink verschijnt in de terminal
+npm run dev
+```
+
+In ontwikkeling toont `bootstrap-admin` de activatielink in de terminal; met `EMAIL_MODE=disabled` worden geen mails verstuurd. Een nieuw schema maak je met `npx drizzle-kit generate` (nooit bestaande migraties wijzigen).
+
+## Tests
+
+```bash
+npm test            # 41 unit-/integratietests tegen een lokale Postgres (maakt zelf database clubsupport_test)
+npm run test:e2e    # bouwt en draait 19 end-to-end- en browsertests (Chromium, nepcamera)
+```
+
+Voor Postgres: `TEST_ADMIN_DATABASE_URL` (standaard `postgres://postgres:postgres@localhost:5432/postgres`). Overzicht per vereiste test: [docs/TESTING.md](docs/TESTING.md).
+
+## Deployment (Vercel)
+
+1. Project gekoppeld aan de GitHub-repo; productiebranch bepaalt de productie-deploy.
+2. Zet de variabelen uit `.env.example` in Vercel (secrets als *Sensitive*). `DATABASE_URL` komt van de Neon-koppeling.
+3. De build draait `tsx scripts/migrate.ts` en `scripts/bootstrap-admin.ts` en daarna `next build`. **Alleen productie-deploys migreren** (previews niet).
+4. Crons (`vercel.json`): mail-retry en opruimen draaien dagelijks; beveiligd met `CRON_SECRET` (zet een willekeurige waarde van ≥ 16 tekens). Op het Hobby-plan zijn alleen dagelijkse crons mogelijk; direct na een beheeractie wordt de outbox al meteen verwerkt.
+5. **Kies een EU-regio** voor zowel de Neon-database als de functies (`vercel.json` zet `fra1`).
+
+### Eerste beheerder
+Zet `BOOTSTRAP_ADMIN_EMAIL` (alleen Production), deploy, en haal de eenmalige activatielink (24 uur) uit de buildlog. Stel een wachtwoord in en richt MFA in. Het adres wijzigen kan later onder *Beheer → Personeel*. Verwijder daarna de variabele.
+
+### Auth
+Better Auth met e-mail+wachtwoord (min. 12 tekens), geen publieke registratie, sessies 24 uur (sliding, `HttpOnly`, `Secure`, `SameSite=Lax`), inlogpogingen begrensd (5 per 5 minuten per IP), TOTP-MFA met herstelcodes. Wachtwoordherstel stuurt alleen een eenmalige link (1 uur) met altijd dezelfde generieke bevestiging; bij een reset worden alle sessies ingetrokken.
+
+### E-mail
+`EMAIL_MODE=test` (standaard): elke mail gaat naar `EMAIL_TEST_RECIPIENT` met prefix `[TEST]`. Om echt te versturen: verifieer een afzenderdomein bij Resend, zet `EMAIL_FROM`, `RESEND_API_KEY` en `EMAIL_MODE=live`. `disabled` verstuurt niets (status "uitgeschakeld" in Beheer).
+
+### Apple Wallet
+Vereist een **Apple Developer-account**: maak een *Pass Type ID*, een Pass Type ID-certificaat (CSR → `.cer`), exporteer certificaat + privésleutel naar PEM en download het *Apple WWDR G4-certificaat*. Zet base64 van de PEM-bestanden in `APPLE_SIGNER_CERT_BASE64`, `APPLE_SIGNER_KEY_BASE64`, `APPLE_WWDR_CERT_BASE64` (+ `APPLE_SIGNER_KEY_PASSPHRASE`), plus `APPLE_PASS_TYPE_ID` en `APPLE_TEAM_ID`. Zonder deze waarden is de knop uitgeschakeld en meldt het endpoint "nog niet ingericht". Raadpleeg de actuele Apple-documentatie (*Wallet Developer Guide*) voor certificaatverloop (Pass Type ID-certificaten verlopen jaarlijks).
+
+### Google Wallet
+Maak een issuer-account in de *Google Pay & Wallet Console*, activeer de Google Wallet API, maak een service account (JSON-sleutel) en geef het toegang als issuer-gebruiker. Zet `GOOGLE_WALLET_ISSUER_ID` en `GOOGLE_WALLET_SERVICE_ACCOUNT_JSON_BASE64`. De applicatie maakt de *Generic*-klasse zelf aan en gebruikt een ondertekende "Opslaan in Google Wallet"-JWT. Tot de issuer-account is goedgekeurd werkt opslaan alleen voor testgebruikers.
+
+### Overige configuratie
+`SCAN_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS`, `DELETED_MEMBER_RETENTION_DAYS`, `REQUIRE_MFA_SCANNER`, `DB_POOL_MAX` — zie `.env.example`.
+
+## Bewaartermijnen
+Standaard: scanlog 90 dagen · auditlog 730 dagen · verwijderde leden 90 dagen daarna definitief gewist (incl. passen en koppelingen) · tokens/importpreviews/rate-limit-rijen/sessies kort · verzonden mails 90 dagen. Dagelijkse opruimjob: `/api/cron/purge`. De club moet deze termijnen vaststellen.
+
+## Bekende beperkingen
+- **Een statische QR kan worden gekopieerd** (screenshot, foto). Mitigatie: de scanner toont altijd naam en lidnummer ter vergelijking met een legitimatiebewijs, en een gelekte pas kan direct en definitief worden ingetrokken/heruitgegeven. Dit voorkomt screenshots **niet** volledig.
+- Wallet-passen zijn een offline weergave. Apple Wallet-passen worden niet automatisch bijgewerkt of ongeldig verklaard (geen pass-webservice); Google Wallet-objecten worden best-effort op INACTIVE gezet. **Intrekking wordt uitsluitend door de online scanner afgedwongen.**
+- Sleutels niet roteren zonder plan: een nieuwe `TOKEN_HMAC_KEY` maakt alle passen onbekend, een nieuwe `TOKEN_ENC_KEY` maakt opgeslagen tokens onleesbaar (passen tonen dan "tijdelijk niet beschikbaar" tot heruitgifte).
+- Tijdelijke app-iconen en Wallet-afbeeldingen (tekst "HHC"): vervang door het officiële logo met `node scripts/make-icons.mjs pad/naar/logo.svg`.
+- DIN-fonts zijn door HHC aangeleverd; controleer of de licentie webgebruik dekt.
+- Niet getest op een echt iOS-/Android-toestel en niet met echte Apple-/Google-/Resend-accounts; zie [docs/TESTING.md](docs/TESTING.md).
+- Het ledenscherm biedt geen offline-opslag van de pas in de PWA (privacy); offline gebruik gaat via Wallet.
