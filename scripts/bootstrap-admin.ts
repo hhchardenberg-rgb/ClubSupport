@@ -26,6 +26,12 @@ async function main() {
   if (existing) await db.update(schema.user).set({ role: "sysadmin" }).where(eq(schema.user.id, userId));
   else await db.insert(schema.user).values({ id: userId, name: "Systeembeheer", email, role: "sysadmin", emailVerified: false });
 
+  // Staat er al een geldige, ongebruikte link? Dan geen nieuwe uitgeven (anders maakt elke deploy de vorige ongeldig).
+  const [open] = (await db.execute(sql`select 1 as x from account_token where user_id = ${userId} and purpose = 'activation' and used_at is null and expires_at > now() limit 1`)).rows;
+  if (open) {
+    console.log("Bootstrap: er staat al een geldige activatielink open — geen nieuwe uitgegeven.");
+    return;
+  }
   await db.update(schema.accountToken).set({ usedAt: new Date() }).where(and(eq(schema.accountToken.userId, userId), eq(schema.accountToken.purpose, "activation"), sql`used_at is null`));
   const token = generateLinkToken();
   await db.insert(schema.accountToken).values({ userId, purpose: "activation", tokenHash: hashLinkToken(token), expiresAt: new Date(Date.now() + 24 * 3600 * 1000) });
