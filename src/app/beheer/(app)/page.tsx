@@ -2,6 +2,7 @@ import Link from "next/link";
 import { can } from "@/lib/permissions";
 import { requireStaff } from "@/lib/session";
 import { dashboardCounts } from "@/server/admin";
+import { PageTitle } from "@/components/ui";
 
 export const metadata = { title: "Overzicht" };
 
@@ -11,8 +12,8 @@ export default async function Page() {
   const role = (s.user as { role?: string }).role;
   return (
     <>
-      <h1>Beheer</h1>
-      <div className="row" style={{ alignItems: "stretch" }}>
+      <PageTitle title="Overzicht" sub="Leden, passen en scans in één oogopslag." />
+      <div className="row" style={{ alignItems: "stretch", gap: 14 }}>
         {[
           ["Leden", c.members],
           ["Actieve passen", c.active],

@@ -33,7 +33,34 @@ Extra keuzes die ik heb gemaakt: *gedeactiveerd* is tijdelijk en heractiveerbaar
 - **E-mail**: transactionele outbox (`email_outbox`) met idempotente sleutels, begrensde retries en backoff; verzending pas ná de databasetransactie; Resend als provider; **testmodus** leidt alle mail om naar één adres.
 - **PWA**: aparte manifesten en service workers voor Ledenpas en Scanner. Service workers cachen alleen de app-shell/statische bestanden en een neutrale offline-pagina — nooit API-antwoorden, ledengegevens of scanresultaten.
 - **Beveiliging**: CSP met nonce per verzoek (alle pagina's dynamisch gerenderd), strikte security headers, `no-store` op alle pagina's, Origin-controle op eigen POST-routes, Postgres-rate-limiter, regio `fra1` voor functies.
-- **Huisstijl**: HHC-huisstijlhandboek 2024 — oranje `#ff6600` en zwart als volle kleur (geen tinten, geen groen), DIN Next LT Pro + FF DIN Black.
+- **Huisstijl**: zie [Vormgeving](#vormgeving).
+
+## Vormgeving
+
+Uitgangspunt is het **HHC-huisstijlhandboek 2024**; er is geen nieuwe huisstijl bedacht. Toegepaste richtlijnen:
+
+| Richtlijn uit het handboek | Toepassing |
+|---|---|
+| Basiskleuren **oranje `#ff6600` en zwart**, altijd als volle kleur, nooit als tint | Alle vlakken en knoppen; geen verlopen, geen lichtere oranjetinten (uitgeschakelde knoppen zijn grijs met een streeprand). Geen groen. |
+| Tekst-op-kleur-combinaties: zwart op oranje, oranje op zwart, wit op zwart, zwart op wit; **nooit oranje tekst op wit of grijs** | Knoppen: zwarte tekst op oranje. Oranje tekst alleen op zwart (header, pas, actieve tab). Lichtgrijs `#f2f2f2` alleen als pagina-achtergrond (zoals in het handboek). |
+| **DIN** (Light voor koppen, Regular voor tekst, Bold voor nadruk, Black voor krachtige woorden), koppen in hoofdletters | DIN Next LT Pro (Light/Regular/Medium/Bold) + FF DIN Black, zelf gehost (woff2). Koppen Light in hoofdletters, labels en knoppen Bold. |
+| **Logo**: schildvorm niet vervormen of herkleuren; een kwart logobreedte witruimte; minimaal 42 px breed | Het officiële PNG-logo staat in header, inlogschermen, de pas, e-mail, Wallet en app-iconen; altijd op zwart of oranje en met behoud van verhouding. |
+| Beeldtaal: vlakke, stoere blokken in oranje/zwart met grote typografie | Zwarte header met oranje onderrand, zwarte pas-kaart met oranje kopstrook, harde randen, grote kopteksten. |
+
+**Samengevat per ervaring**
+- **Ledenpas:** de pas is een kaart (oranje kopstrook met logo, zwart vlak, witte QR). Meerdere passen staan in een veegbare carrousel met pijlen, stippen en toetsenbord; de volgende kaart piekt in beeld.
+- **Scanner:** één grote actie ("Scan starten"), resultaten als vol-scherm-paneel met icoon én tekst: GELDIG (zwart + oranje vinkje), ONGELDIG (rood + kruis), NIET GECONTROLEERD (oranje + geen-verbinding-icoon). Leesbaar in fel licht door hoog contrast en grote letters.
+- **Beheer:** compacte header met menu (op telefoon een veegbare rij), tweekoloms lidpagina op desktop, tabellen die op telefoon horizontaal scrollen, overal dezelfde knoppen, meldingen en statusbadges.
+- **Herbruikbare onderdelen:** `src/components/ui.tsx` (`Alert`, `Flash`, `StatusBadge`, `Badge`, `PageTitle`, `EmptyState`), `Logo`, `SiteHeader`, `AuthShell`, `PassCarousel`, en de ontwerptokens/klassen in `src/app/globals.css`.
+
+**Aannames waar het handboek niets over zegt** (bewust zo gekozen):
+1. *Rood* `#b00020` voor fouten en onomkeerbare acties (het handboek kent geen foutkleur; groen is bewust vermeden, succes is zwart met een oranje vinkje).
+2. *Afgeronde hoeken* (10–12 px) en een zachte, minimale schaduw voor een moderne digitale uitstraling; het handboek is voor drukwerk en noemt geen UI-hoeken.
+3. *Hoverstatus* van knoppen: omkeren naar zwart/oranje, passend bij de twee huiskleuren.
+4. *Pagina-achtergrond* lichtgrijs `#f2f2f2` (de achtergrond van de handboekpagina's); geen donker thema, omdat de huisstijl uit oranje en zwart bestaat.
+5. Het handboek noemt het logo met en zonder gloss; hier wordt het aangeleverde RGB-logo gebruikt.
+
+Toegankelijkheid: contrast (zwart/oranje/wit), grote tikdoelen (≥ 44–50 px), zichtbare focus (oranje ring + zwarte rand), labels bij alle velden, `role=alert/status` bij meldingen, `prefers-reduced-motion`. Een automatische axe-controle (WCAG 2.1 A/AA) draait in de browsertests op de kernschermen op telefoon en desktop; dat dekt maar een deel van de eisen, dus een handmatige schermlezertest blijft nodig.
 
 ## Datamodel
 
@@ -78,7 +105,7 @@ In ontwikkeling toont `bootstrap-admin` de activatielink in de terminal; met `EM
 
 ```bash
 npm test            # 41 unit-/integratietests tegen een lokale Postgres (maakt zelf database clubsupport_test)
-npm run test:e2e    # bouwt en draait 19 end-to-end- en browsertests (Chromium, nepcamera)
+npm run test:e2e    # bouwt en draait 21 end-to-end- en browsertests (Chromium, nepcamera, axe-toegankelijkheidscontrole)
 ```
 
 Voor Postgres: `TEST_ADMIN_DATABASE_URL` (standaard `postgres://postgres:postgres@localhost:5432/postgres`). Overzicht per vereiste test: [docs/TESTING.md](docs/TESTING.md).
@@ -106,6 +133,9 @@ Vereist een **Apple Developer-account**: maak een *Pass Type ID*, een Pass Type 
 ### Google Wallet
 Maak een issuer-account in de *Google Pay & Wallet Console*, activeer de Google Wallet API, maak een service account (JSON-sleutel) en geef het toegang als issuer-gebruiker. Zet `GOOGLE_WALLET_ISSUER_ID` en `GOOGLE_WALLET_SERVICE_ACCOUNT_JSON_BASE64`. De applicatie maakt de *Generic*-klasse zelf aan en gebruikt een ondertekende "Opslaan in Google Wallet"-JWT. Tot de issuer-account is goedgekeurd werkt opslaan alleen voor testgebruikers.
 
+### Demo-/testaccounts
+Met `SEED_DEMO=true` (Production) maakt de build bij de eerste keer drie demo-accounts met **synthetische gegevens** en willekeurige wachtwoorden: één ledenaccount met 1 pas, één met 3 passen en een testcontroleur. De wachtwoorden verschijnen **één keer** in de buildlog (verder niet opgeslagen); bestaande accounts blijven ongemoeid. `SEED_DEMO=reset` maakt nieuwe, `SEED_DEMO=remove` verwijdert alle demo-gegevens. **Verwijder de demo-accounts vóór echte leden worden ingevoerd** en laat de variabele niet staan: het zijn bekende accounts. Er wordt voor demo-accounts geen e-mail verstuurd.
+
 ### Overige configuratie
 `SCAN_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS`, `DELETED_MEMBER_RETENTION_DAYS`, `REQUIRE_MFA_SCANNER`, `DB_POOL_MAX` — zie `.env.example`.
 
@@ -116,7 +146,7 @@ Standaard: scanlog 90 dagen · auditlog 730 dagen · verwijderde leden 90 dagen 
 - **Een statische QR kan worden gekopieerd** (screenshot, foto). Mitigatie: de scanner toont altijd naam en lidnummer ter vergelijking met een legitimatiebewijs, en een gelekte pas kan direct en definitief worden ingetrokken/heruitgegeven. Dit voorkomt screenshots **niet** volledig.
 - Wallet-passen zijn een offline weergave. Apple Wallet-passen worden niet automatisch bijgewerkt of ongeldig verklaard (geen pass-webservice); Google Wallet-objecten worden best-effort op INACTIVE gezet. **Intrekking wordt uitsluitend door de online scanner afgedwongen.**
 - Sleutels niet roteren zonder plan: een nieuwe `TOKEN_HMAC_KEY` maakt alle passen onbekend, een nieuwe `TOKEN_ENC_KEY` maakt opgeslagen tokens onleesbaar (passen tonen dan "tijdelijk niet beschikbaar" tot heruitgifte).
-- Tijdelijke app-iconen en Wallet-afbeeldingen (tekst "HHC"): vervang door het officiële logo met `node scripts/make-icons.mjs pad/naar/logo.svg`.
+- App-iconen, favicon, e-mail- en Wallet-afbeeldingen worden uit het logo gegenereerd: `node scripts/make-icons.mjs brand-source/HHC_ClubSupport_Logo_RGB.png` (vereist Chromium via Playwright). Het bronbestand staat in `brand-source/`.
 - DIN-fonts zijn door HHC aangeleverd; controleer of de licentie webgebruik dekt.
 - Niet getest op een echt iOS-/Android-toestel en niet met echte Apple-/Google-/Resend-accounts; zie [docs/TESTING.md](docs/TESTING.md).
 - Het ledenscherm biedt geen offline-opslag van de pas in de PWA (privacy); offline gebruik gaat via Wallet.

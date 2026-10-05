@@ -1,4 +1,5 @@
 "use client";
+import { Alert } from "@/components/ui";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 
@@ -47,7 +48,7 @@ export function LoginForm({ area }: { area: Area }) {
         <h2 id="t">Verificatiecode</h2>
         <label htmlFor="code">6-cijferige code uit je authenticator-app</label>
         <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9 ]{6,7}" />
-        {error && <p role="alert" className="error">{error}</p>}
+        {error && <Alert variant="error">{error}</Alert>}
         <p><button disabled={busy}>Bevestigen</button></p>
       </form>
     );
@@ -59,7 +60,7 @@ export function LoginForm({ area }: { area: Area }) {
       <input id="email" name="email" type="email" autoComplete="username" required />
       <label htmlFor="password">Wachtwoord</label>
       <input id="password" name="password" type="password" autoComplete="current-password" required />
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <Alert variant="error">{error}</Alert>}
       <p><button disabled={busy}>{busy ? "Bezig…" : "Inloggen"}</button></p>
       <p><a href="/wachtwoord-vergeten">Wachtwoord vergeten?</a></p>
     </form>

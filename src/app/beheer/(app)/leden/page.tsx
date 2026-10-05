@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyState, PageTitle, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/session";
 import { listMembers, MEMBER_STATUS_FILTERS } from "@/server/admin";
 
@@ -13,14 +14,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
   const href = (p: number) => `/beheer/leden?${new URLSearchParams({ ...(sp.q ? { q: sp.q } : {}), ...(status ? { status } : {}), page: String(p) })}`;
   return (
     <>
-      <h1>Leden</h1>
+      <PageTitle title="Leden" sub={`${total} resultaten`} actions={<Link className="btn" href="/beheer/leden/nieuw">Nieuw lid</Link>} />
       <form method="get" className="card" role="search" aria-label="Leden zoeken">
-        <div className="row" style={{ alignItems: "end" }}>
-          <div style={{ flex: "2 1 220px" }}>
+        <div className="toolbar">
+          <div className="grow">
             <label htmlFor="q">Naam of lidnummer</label>
             <input id="q" name="q" defaultValue={sp.q ?? ""} maxLength={100} />
           </div>
-          <div style={{ flex: "1 1 180px" }}>
+          <div className="mid">
             <label htmlFor="status">Status</label>
             <select id="status" name="status" defaultValue={status ?? ""}>
               <option value="">Alle</option>
@@ -28,12 +29,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
             </select>
           </div>
           <button>Zoeken</button>
-          <Link className="btn secondary" href="/beheer/leden/nieuw">Nieuw lid</Link>
         </div>
       </form>
-      <p className="muted" aria-live="polite">{total} resultaten</p>
-      {rows.length === 0 ? (
-        <div className="card" role="status"><p>Geen leden gevonden.</p></div>
+            {rows.length === 0 ? (
+        <EmptyState title="Geen leden gevonden">Pas de zoekopdracht of het filter aan.</EmptyState>
       ) : (
         <div className="table-wrap">
         <table>
@@ -45,15 +44,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
                 <td>{r.memberNumber}</td>
                 <td><Link href={`/beheer/leden/${r.id}`}>{r.fullName}</Link></td>
                 <td>
-                  {r.deletedAt ? <span className="badge bad">Verwijderd</span> : r.passStatus === "active" ? <span className="badge ok">Actief</span> : r.passStatus === "deactivated" ? <span className="badge warn">Gedeactiveerd</span> : <span className="badge bad">Geen actieve pas</span>}
-                </td>
+                  <StatusBadge status={r.deletedAt ? "deleted" : r.passStatus === "active" ? "active" : r.passStatus === "deactivated" ? "deactivated" : "none"} /></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       )}
-      <nav className="row" aria-label="Paginering" style={{ marginTop: 12 }}>
+      <nav className="pager" aria-label="Paginering">
         {page > 1 && <Link className="btn secondary" href={href(page - 1)}>Vorige</Link>}
         <span>Pagina {page} van {pages}</span>
         {page < pages && <Link className="btn secondary" href={href(page + 1)}>Volgende</Link>}

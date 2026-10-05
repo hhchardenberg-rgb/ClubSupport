@@ -1,4 +1,4 @@
-import { Flash } from "@/components/Flash";
+import { Flash, PageTitle } from "@/components/ui";
 import { requireStaff } from "@/lib/session";
 import { listStaff } from "@/server/admin";
 import { changeRoleAction, changeStaffEmailAction, createStaffAction, resendStaffInviteAction, toggleStaffAction } from "../actions";
@@ -12,8 +12,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
   const staff = await listStaff();
   return (
     <>
-      <h1>Personeel</h1>
-      <p className="muted">Elke medewerker meldt zich persoonlijk aan. Beheer- en controleursrollen horen nooit bij een gedeeld account. MFA is verplicht voor Ledenbeheer en Systeembeheer.</p>
+      <PageTitle title="Personeel" sub="Elke medewerker meldt zich persoonlijk aan. Beheer- en controleursrollen horen nooit bij een gedeeld account. MFA is verplicht voor Ledenbeheer en Systeembeheer." />
       <Flash msg={sp.msg} err={sp.err} />
       <form action={createStaffAction} className="card" aria-labelledby="n">
         <h2 id="n">Staf-account aanmaken</h2>

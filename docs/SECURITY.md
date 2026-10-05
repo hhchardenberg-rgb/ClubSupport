@@ -76,6 +76,7 @@ Legenda: **T** = door een geautomatiseerde test gedekt · **I** = geïmplementee
 - `drizzle-kit` → oude `esbuild` (matig): alleen build-/ontwikkeltool, draait niet in de runtime.
 
 ## 6. Resterende risico's (eerlijk samengevat)
+0. **Demo-accounts** (`SEED_DEMO`): bekende accounts met wachtwoorden in de buildlog; alleen voor testen en vóór echt gebruik verwijderen (`SEED_DEMO=remove`).
 1. Gekopieerde QR blijft geldig tot intrekking (ontwerpkeuze, zie §1).
 2. Wallet-kopieën worden niet door Apple/Google afgedwongen; alleen de online scanner is leidend.
 3. Server actions zijn beschermd door `requireStaff` in elke actie en door Next.js' Origin-controle, maar niet per actie met een ruw POST-verzoek getest.

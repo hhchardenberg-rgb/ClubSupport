@@ -1,5 +1,6 @@
 import { SiteHeader } from "@/components/SiteHeader";
 import { BeheerNav } from "@/components/BeheerNav";
+import { SignOutButton } from "@/components/SignOutButton";
 import { can } from "@/lib/permissions";
 import { requireStaff } from "@/lib/session";
 
@@ -16,8 +17,8 @@ export default async function BeheerLayout({ children }: { children: React.React
   ];
   return (
     <>
-      <SiteHeader area="beheer">
-        <BeheerNav links={links} />
+      <SiteHeader area="beheer" nav={<BeheerNav links={links} />}>
+        <SignOutButton to="/beheer/inloggen" />
       </SiteHeader>
       <main id="main" style={{ maxWidth: 980 }}>{children}</main>
     </>

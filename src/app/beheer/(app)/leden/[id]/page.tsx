@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Flash } from "@/components/Flash";
+import { Badge, Flash, PageTitle, StatusBadge } from "@/components/ui";
 import { can } from "@/lib/permissions";
 import { requireStaff } from "@/lib/session";
 import { getMemberDetail } from "@/server/admin";
@@ -35,16 +35,17 @@ export default async function Page({ params, searchParams }: { params: Promise<{
 
   return (
     <>
-      <h1>{m.fullName}</h1>
-      <p>Lidnummer <strong>{m.memberNumber}</strong> {deleted && <span className="badge bad">Verwijderd</span>}</p>
+      <PageTitle title={m.fullName} sub={<>Lidnummer <strong>{m.memberNumber}</strong> {deleted ? <StatusBadge status="deleted" /> : <StatusBadge status={live ? (live.status as "active" | "deactivated") : "none"} />}</>} />
       <Flash msg={sp.msg} err={sp.err} />
+      <div className="cols">
+      <div>
 
       <section className="card" aria-labelledby="pas">
         <h2 id="pas">Pas</h2>
         {live ? (
-          <p>Status: {live.status === "active" ? <span className="badge ok">Actief</span> : <span className="badge warn">Gedeactiveerd</span>} · uitgegeven {fmt(live.issuedAt)}</p>
+          <p>Status: <StatusBadge status={live.status as "active" | "deactivated"} /> · uitgegeven {fmt(live.issuedAt)}</p>
         ) : (
-          <p><span className="badge bad">Geen actieve pas</span></p>
+          <p><StatusBadge status="none" /></p>
         )}
         {canPass && !deleted && live?.status === "active" && (
           <form action={deactivateAction} className="card">
@@ -95,6 +96,8 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           </table>
         </details>
       </section>
+      </div>
+      <div>
 
       {!deleted && can(role, "members.write") && (
         <form action={updateMemberAction} className="card" aria-labelledby="gv">
@@ -113,7 +116,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         {accounts.length === 0 && <p>Dit lid is aan geen enkel account gekoppeld.</p>}
         {accounts.map((a) => (
           <div key={a.userId} className="notice" style={{ marginBottom: 8 }}>
-            <p>{a.email} · {a.activated ? <span className="badge ok">Geactiveerd</span> : <span className="badge warn">Nog niet geactiveerd</span>} · gekoppeld {fmt(a.grantedAt)}</p>
+            <p>{a.email} · {a.activated ? <Badge tone="ok">Geactiveerd</Badge> : <Badge tone="warn">Nog niet geactiveerd</Badge>} · gekoppeld {fmt(a.grantedAt)}</p>
             <div className="row">
               {!a.activated && can(role, "email.view") && (
                 <form action={resendInviteAction}><input type="hidden" name="memberId" value={m.id} /><input type="hidden" name="userId" value={a.userId} /><button className="secondary">Uitnodiging opnieuw versturen</button></form>
@@ -147,8 +150,10 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         )}
       </section>
 
+      </div>
       {canPass && !deleted && (
-        <form action={deleteMemberAction} className="card" aria-labelledby="del" style={{ borderLeftColor: "#b00020" }}>
+        <div className="span-2">
+        <form action={deleteMemberAction} className="card danger-zone" aria-labelledby="del">
           <h2 id="del">Lid verwijderen</h2>
           <p>De pas is direct ongeldig en het lid verdwijnt uit de lijsten. Persoonsgegevens worden na de bewaartermijn definitief gewist. Verwijderen kan alleen per lid, nooit in bulk.</p>
           <input type="hidden" name="memberId" value={m.id} />
@@ -156,7 +161,9 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           <label htmlFor="typed">Typ VERWIJDER om te bevestigen</label><input id="typed" name="typed" required autoComplete="off" />
           <p><button className="danger">Lid verwijderen</button></p>
         </form>
+        </div>
       )}
+      </div>
     </>
   );
 }

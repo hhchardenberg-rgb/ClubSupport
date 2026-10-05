@@ -15,6 +15,8 @@ Taal van de interface en documentatie: **Nederlands**. Namen consequent: **HHC C
 - Gebruik geen groen in de UI; alleen HHC-oranje `#ff6600`, zwart, wit/grijs (rood alleen voor fouten/onomkeerbare acties). Oranje nooit als tint en nooit als tekst op wit/grijs.
 - Geen secrets in de repository; alleen namen in `.env.example`.
 
+- Gebruik de gedeelde UI-onderdelen (`src/components/ui.tsx`, `Logo`, `SiteHeader`, `AuthShell`) en de klassen in `globals.css`; maak geen losse stijlen per pagina. Het logo komt uit `src/lib/brand.generated.ts` (script `scripts/make-icons.mjs`); teken of kleur het logo nooit zelf.
+
 ## Werkwijze
 - `npx tsc --noEmit && npm test && npm run test:e2e` vóór elke push.
 - Documentatie: `README.md` (setup, model, beperkingen), `docs/SECURITY.md` (dreigingsmodel, matrix, ASVS, runbook), `docs/TESTING.md`.

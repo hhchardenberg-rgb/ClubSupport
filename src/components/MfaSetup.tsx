@@ -1,4 +1,5 @@
 "use client";
+import { Alert } from "@/components/ui";
 import QRCode from "qrcode";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
@@ -52,7 +53,7 @@ export function MfaSetup({ area }: { area: "beheer" | "scanner" }) {
         <img src={qr} alt="QR-code om MFA in te stellen" width={240} height={240} />
         <label htmlFor="code">Voer de 6-cijferige code in</label>
         <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9 ]{6,7}" />
-        {error && <p role="alert" className="error">{error}</p>}
+        {error && <Alert variant="error">{error}</Alert>}
         <p><button disabled={busy}>Bevestigen</button></p>
       </form>
     );
@@ -62,7 +63,7 @@ export function MfaSetup({ area }: { area: "beheer" | "scanner" }) {
       <p>Voor deze omgeving is MFA verplicht. Je hebt een authenticator-app nodig (bijvoorbeeld Google Authenticator of Microsoft Authenticator).</p>
       <label htmlFor="password">Bevestig met je wachtwoord</label>
       <input id="password" name="password" type="password" autoComplete="current-password" required />
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <Alert variant="error">{error}</Alert>}
       <p><button disabled={busy}>Doorgaan</button></p>
     </form>
   );

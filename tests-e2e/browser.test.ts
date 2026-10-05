@@ -29,6 +29,7 @@ beforeAll(async () => {
   // Gezinsaccount met 3 leden voor de carrousel-test
   const acc = await import("@/server/accounts");
   await db.insert(schema.user).values({ id: "adm", name: "adm", email: "adm@example.test", role: "manager", emailVerified: true });
+  await ctx.internalAdapter.linkAccount({ userId: "adm", providerId: "credential", accountId: "adm", password: hash });
   let famId = "";
   for (const [n, name] of [[31, "Eerste Pas"], [32, "Tweede Pas"], [33, "Derde Pas"]] as const) {
     const r = await acc.createMemberWithPass("adm", { memberNumber: `F${n}`, fullName: name, email: "fam@example.test", confirmLinkExisting: true });
@@ -241,5 +242,86 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     // geen horizontale pagina-scroll op 393 px
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await ctx.close();
+  });
+
+  it("toegankelijkheid (axe, WCAG 2.1 AA): geen overtredingen op de kernschermen", async () => {
+    const axeSrc = (await import("node:fs")).readFileSync(path.resolve("node_modules/axe-core/axe.min.js"), "utf8");
+    const { db, schema } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const problems: string[] = [];
+    const check = async (page: import("playwright-core").Page, name: string) => {
+      await page.waitForTimeout(300);
+      await page.evaluate(axeSrc);
+      const res = await page.evaluate(async () => {
+        // @ts-expect-error axe wordt ingeladen
+        const r = await axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] });
+        return r.violations.map((v: any) => ({ id: v.id, impact: v.impact, nodes: v.nodes.slice(0, 3).map((n: any) => n.target.join(" ") + " :: " + (n.any[0]?.message ?? n.failureSummary ?? "").slice(0, 140)) }));
+      });
+      for (const v of res) problems.push(`${name}: ${v.id} (${v.impact}) ${v.nodes.join(" | ")}`);
+    };
+    const mk = (device: keyof typeof devices) => browser.newContext({ ...devices[device], bypassCSP: true, reducedMotion: "reduce" });
+    // Controle dat de axe-opstelling echt iets vindt (anders zegt "geen overtredingen" niets).
+    {
+      const c = await mk("Pixel 5");
+      const pc = await c.newPage();
+      await pc.setContent('<html lang="nl"><body><main><img src="x.png"><p style="color:#ff6600;background:#fff">Laag contrast</p><input></main></body></html>');
+      await check(pc, "controle");
+      await c.close();
+      expect(problems.some((x) => x.includes("image-alt")) && problems.some((x) => x.includes("color-contrast")) && problems.some((x) => x.includes("label")), `axe-controle werkt niet: ${problems.join(" / ")}`).toBe(true);
+      problems.length = 0;
+    }
+    const login = async (page: import("playwright-core").Page, area: string, email: string) => {
+      await resetLoginLimit();
+      await page.goto(`${BASE}/${area}/inloggen`);
+      await page.fill("#email", email);
+      await page.fill("#password", "een-lang-wachtwoord-1");
+      await page.click("button:has-text('Inloggen')");
+      await page.waitForURL((u) => !u.pathname.includes("inloggen"), { timeout: 20000 });
+    };
+    for (const device of ["Pixel 5", "Desktop Chrome"] as const) {
+      const tag = device === "Pixel 5" ? "mobiel" : "desktop";
+      const pub = await mk(device);
+      const p0 = await pub.newPage();
+      for (const [n, u] of [["login-lid", "/ledenpas/inloggen"], ["login-scanner", "/scanner/inloggen"], ["login-beheer", "/beheer/inloggen"], ["vergeten", "/wachtwoord-vergeten"], ["activeren-ongeldig", "/activeren?token=ongeldig"], ["wachtwoord-resetten-ongeldig", "/wachtwoord-resetten?token=ongeldig"]]) {
+        await p0.goto(BASE + u);
+        await check(p0, `${tag} ${n}`);
+      }
+      await pub.close();
+
+      const lid = await mk(device);
+      const pl = await lid.newPage();
+      await login(pl, "ledenpas", "fam@example.test");
+      await check(pl, `${tag} ledenpas (3 passen)`);
+      await lid.close();
+
+      const sc = await mk(device);
+      const ps = await sc.newPage();
+      await login(ps, "scanner", "scn@example.test");
+      await check(ps, `${tag} scanner`);
+      await ps.fill("#code", "A".repeat(43));
+      await ps.click("button:has-text('Controleren')");
+      await ps.waitForSelector("section[role=alert]");
+      await check(ps, `${tag} scanner-resultaat ongeldig`);
+      await ps.route("**/api/scan", (r) => r.abort());
+      await ps.click("button:has-text('Volgende scan')").catch(() => undefined);
+      await ps.fill("#code", "x");
+      await ps.click("button:has-text('Controleren')");
+      await ps.waitForSelector("text=NIET GECONTROLEERD");
+      await check(ps, `${tag} scanner-resultaat niet gecontroleerd`);
+      await sc.close();
+
+      const bh = await mk(device);
+      const pb = await bh.newPage();
+      await login(pb, "beheer", "adm@example.test");
+      await db.update(schema.user).set({ twoFactorEnabled: true }).where(eq(schema.user.id, "adm"));
+      const [m] = await db.select().from(schema.member).limit(1);
+      for (const [n, u] of [["overzicht", "/beheer"], ["leden", "/beheer/leden"], ["nieuw lid", "/beheer/leden/nieuw"], ["lid", `/beheer/leden/${m.id}?msg=Gelukt`], ["lid foutmelding", `/beheer/leden/${m.id}?err=Fout`], ["import", "/beheer/import"]]) {
+        await pb.goto(BASE + u);
+        await check(pb, `${tag} beheer ${n}`);
+      }
+      await db.update(schema.user).set({ twoFactorEnabled: false }).where(eq(schema.user.id, "adm"));
+      await bh.close();
+    }
+    expect(problems, problems.join("\n")).toEqual([]);
   });
 });

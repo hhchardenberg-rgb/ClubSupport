@@ -4,7 +4,7 @@ import { Logo } from "./Logo";
 const NAMES = { scanner: "Scanner", beheer: "Beheer" } as const;
 
 /** Ledenomgeving: alleen het merk. Scanner/Beheer: merk + omgevingsnaam, nergens aan de ledenkant gelinkt. */
-export function SiteHeader({ area, children }: { area?: keyof typeof NAMES; children?: React.ReactNode }) {
+export function SiteHeader({ area, nav, children }: { area?: keyof typeof NAMES; nav?: React.ReactNode; children?: React.ReactNode }) {
   return (
     <header className="site-header">
       <div className="in">
@@ -12,6 +12,7 @@ export function SiteHeader({ area, children }: { area?: keyof typeof NAMES; chil
           <Logo height={44} />
           {area ? <span className="area">{NAMES[area]}</span> : null}
         </Link>
+        {nav}
         {children}
       </div>
     </header>

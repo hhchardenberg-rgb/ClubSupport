@@ -1,4 +1,5 @@
 "use client";
+import { Alert } from "@/components/ui";
 import { useState } from "react";
 
 async function post(url: string, body: unknown) {
@@ -40,7 +41,7 @@ export function SetPasswordForm({ token, purpose }: { token: string; purpose: "a
       <input id="password" name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required />
       <label htmlFor="confirm">Herhaal wachtwoord</label>
       <input id="confirm" name="confirm" type="password" autoComplete="new-password" minLength={12} maxLength={128} required />
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <Alert variant="error">{error}</Alert>}
       <p><button disabled={busy}>{busy ? "Bezig…" : "Wachtwoord opslaan"}</button></p>
     </form>
   );

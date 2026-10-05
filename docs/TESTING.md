@@ -1,6 +1,6 @@
 # Testoverzicht
 
-Laatste volledige run (lokaal, Postgres 16, Node 22, Chromium): **41 unit-/integratietests + 19 end-to-end-/browsertests, allemaal geslaagd.** De CI-workflow (`.github/workflows/ci.yml`) is geschreven maar nog niet op GitHub gedraaid.
+Laatste volledige run (lokaal, Postgres 16, Node 22, Chromium): **41 unit-/integratietests + 21 end-to-end-/browsertests, allemaal geslaagd.** De CI-workflow (`.github/workflows/ci.yml`) is geschreven maar nog niet op GitHub gedraaid.
 
 ```bash
 npm test          # unit/integratie (tests/*.test.ts)
@@ -27,13 +27,14 @@ npm run test:e2e  # next build + e2e + browser (tests-e2e/*.test.ts)
 | 14 | Activatie-/resetlinks eenmalig, verlopen, gehasht, geen account-enumeratie | ✔ | `links.test.ts` |
 | 15 | PWA, camera, handmatige invoer, responsive op iOS Safari/Android Chrome | **gedeeltelijk** | `browser.test.ts`: Chromium met Pixel 5/iPhone 13-emulatie, nepcamera, geweigerde camera, handmatige invoer, offline, manifesten + iconen + service worker, geen CSP-fouten, 320 px-breedte. **Niet** op echte toestellen of in echte Safari/WebKit |
 
-Aanvullend gedekt: bewaartermijnen/opruimjob en cron-autorisatie (`retention.test.ts`), CSRF/Origin op eigen routes, security headers, geblokkeerd account, MFA-redirect voor beheerrollen, hoofdpagina zonder Scanner/Beheer-verwijzingen (`roles.test.ts`).
+Aanvullend gedekt: **veegbare pas-carrousel** (echte aanraak-veeg via CDP, pijlen, stippen, toetsenbord, labels, geen horizontale scroll; getest met verminderde beweging), **automatische toegankelijkheidscontrole** (axe-core, WCAG 2.1 A/AA) op login-, activatie-, ledenpas-, scanner- en beheerschermen op telefoon (Pixel 5) en desktop, met een negatieve controle dat axe echt overtredingen vindt, bewaartermijnen/opruimjob en cron-autorisatie (`retention.test.ts`), CSRF/Origin op eigen routes, security headers, geblokkeerd account, MFA-redirect voor beheerrollen, hoofdpagina zonder Scanner/Beheer-verwijzingen (`roles.test.ts`).
 
 ## Bekende gaten in de tests
 - **Server actions** worden via de pagina's en de `requireStaff`-guard beschermd en de routes zijn e2e getest, maar elke afzonderlijke action is niet met een ruw POST-verzoek aangeroepen door een onbevoegde rol.
 - **MFA-inrichting** (TOTP scannen/bevestigen) is niet geautomatiseerd getest; alleen de redirect-eis en de inlogstap zijn gedekt.
 - **Echte Apple/Google/Resend-accounts** zijn niet gebruikt: pkpass is ondertekend met testcertificaten (Apple Wallet kan een pas met testcertificaten niet openen) en de Google API is gemockt.
-- Geen belasting-, toegankelijkheids- (schermlezer) of penetratietest. Contrast en toetsenbordbediening zijn ontworpen (zichtbare focus, grote tikdoelen, labels, `role=alert`) maar niet met een schermlezer geverifieerd.
+- Geen belasting- of penetratietest. De automatische axe-controle dekt maar een deel van de toegankelijkheidseisen; een schermlezertest (VoiceOver/TalkBack) en een toetsenbordronde door Beheer zijn niet gedaan.
+- Personeels-, audit- en importscherm zijn visueel gecontroleerd maar niet in de axe-run opgenomen (die dekt overzicht, leden, nieuw lid, lid en import).
 
 ## Handmatige apparaattest (uit te voeren door de club vóór livegang)
 

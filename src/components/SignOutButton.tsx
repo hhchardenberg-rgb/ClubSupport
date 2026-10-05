@@ -6,7 +6,6 @@ export function SignOutButton({ to }: { to: string }) {
     <button
       type="button"
       className="secondary small"
-      style={{ marginLeft: "auto" }}
       onClick={async () => {
         await authClient.signOut();
         window.location.assign(to);

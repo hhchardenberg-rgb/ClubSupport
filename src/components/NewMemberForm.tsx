@@ -1,4 +1,5 @@
 "use client";
+import { Alert } from "@/components/ui";
 import { useActionState } from "react";
 import { createMemberAction, type FormState } from "@/app/beheer/(app)/actions";
 
@@ -25,7 +26,7 @@ export function NewMemberForm() {
           </label>
         </div>
       )}
-      {state?.error && <p role="alert" className="error">{state.error}</p>}
+      {state?.error && <Alert variant="error">{state.error}</Alert>}
       <p><button disabled={pending}>{pending ? "Bezig…" : state?.needsConfirm ? "Bevestigen en aanmaken" : "Lid en pas aanmaken"}</button></p>
     </form>
   );

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Flash } from "@/components/Flash";
+import { Alert, Flash, PageTitle } from "@/components/ui";
 import { UploadForm } from "@/components/ImportFlow";
 import { requireStaff } from "@/lib/session";
 import { getBatchPreview } from "@/server/import";
@@ -13,9 +13,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ b
   const preview = sp.batch ? await getBatchPreview(s.user.id, sp.batch) : null;
   return (
     <>
-      <h1>Leden importeren</h1>
+      <PageTitle title="Leden importeren" sub="Controleer de preview voordat er iets wordt opgeslagen of gemaild." />
       <Flash msg={sp.msg} err={sp.err} />
-      {sp.batch && !preview && <p role="alert" className="card error">Deze preview bestaat niet meer of is verlopen. Upload het bestand opnieuw.</p>}
+      {sp.batch && !preview && <Alert variant="error">Deze preview bestaat niet meer of is verlopen. Upload het bestand opnieuw.</Alert>}
       {!preview && <UploadForm />}
       {preview && (
         <>
@@ -46,7 +46,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ b
               {preview.rows.map((r) => (
                 <tr key={r.line}>
                   <td>{r.line}</td><td>{r.memberNumber}</td><td>{r.fullName}</td><td>{r.email}{r.group ? ` (groep ${r.group})` : ""}</td>
-                  <td>{r.status === "import" ? <span className="badge ok">Importeren</span> : <span className="badge bad">Overslaan</span>}{r.errors.length > 0 && <ul className="error">{r.errors.map((e) => <li key={e}>{e}</li>)}</ul>}</td>
+                  <td className="wrap">{r.status === "import" ? <span className="badge ok">Importeren</span> : <span className="badge bad">Overslaan</span>}{r.errors.length > 0 && <ul className="error">{r.errors.map((e) => <li key={e}>{e}</li>)}</ul>}</td>
                 </tr>
               ))}
             </tbody>
