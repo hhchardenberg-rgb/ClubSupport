@@ -35,6 +35,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
       {rows.length === 0 ? (
         <div className="card" role="status"><p>Geen leden gevonden.</p></div>
       ) : (
+        <div className="table-wrap">
         <table>
           <caption className="sr-only">Ledenlijst</caption>
           <thead><tr><th scope="col">Lidnummer</th><th scope="col">Naam</th><th scope="col">Status</th></tr></thead>
@@ -50,6 +51,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
             ))}
           </tbody>
         </table>
+      </div>
       )}
       <nav className="row" aria-label="Paginering" style={{ marginTop: 12 }}>
         {page > 1 && <Link className="btn secondary" href={href(page - 1)}>Vorige</Link>}

@@ -38,6 +38,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ b
               </div>
             )}
           </section>
+          <div className="table-wrap">
           <table>
             <caption className="sr-only">Preview van de import</caption>
             <thead><tr><th scope="col">Regel</th><th scope="col">Lidnummer</th><th scope="col">Naam</th><th scope="col">E-mail</th><th scope="col">Resultaat</th></tr></thead>
@@ -50,6 +51,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ b
               ))}
             </tbody>
           </table>
+      </div>
           <form action={commitImportAction} className="card" aria-labelledby="cf">
             <h2 id="cf">3. Bevestigen</h2>
             <input type="hidden" name="batchId" value={preview.batchId} />

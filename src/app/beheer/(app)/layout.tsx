@@ -1,6 +1,5 @@
-import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
-import { SignOutButton } from "@/components/SignOutButton";
+import { BeheerNav } from "@/components/BeheerNav";
 import { can } from "@/lib/permissions";
 import { requireStaff } from "@/lib/session";
 
@@ -8,17 +7,17 @@ import { requireStaff } from "@/lib/session";
 export default async function BeheerLayout({ children }: { children: React.ReactNode }) {
   const s = await requireStaff("beheer", "members.read");
   const role = (s.user as { role?: string }).role;
+  const links = [
+    { href: "/beheer", label: "Overzicht" },
+    { href: "/beheer/leden", label: "Leden" },
+    ...(can(role, "import") ? [{ href: "/beheer/import", label: "Import" }] : []),
+    ...(can(role, "staff.manage") ? [{ href: "/beheer/personeel", label: "Personeel" }] : []),
+    ...(can(role, "audit.read") ? [{ href: "/beheer/audit", label: "Audit" }] : []),
+  ];
   return (
     <>
       <SiteHeader area="beheer">
-        <nav aria-label="Beheer" style={{ display: "flex", gap: "4px 16px", flexWrap: "wrap", marginLeft: "auto", alignItems: "center" }}>
-          <Link href="/beheer">Overzicht</Link>
-          <Link href="/beheer/leden">Leden</Link>
-          {can(role, "import") && <Link href="/beheer/import">Import</Link>}
-          {can(role, "staff.manage") && <Link href="/beheer/personeel">Personeel</Link>}
-          {can(role, "audit.read") && <Link href="/beheer/audit">Audit</Link>}
-          <SignOutButton to="/beheer/inloggen" />
-        </nav>
+        <BeheerNav links={links} />
       </SiteHeader>
       <main id="main" style={{ maxWidth: 980 }}>{children}</main>
     </>

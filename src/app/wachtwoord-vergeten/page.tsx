@@ -1,16 +1,12 @@
 import { ForgotForm } from "@/components/AccountForms";
-import { SiteHeader } from "@/components/SiteHeader";
+import { AuthShell } from "@/components/AuthShell";
 
 export const metadata = { title: "Wachtwoord vergeten" };
 
 export default function Page() {
   return (
-    <>
-      <SiteHeader />
-      <main id="main">
-        <h1>Wachtwoord vergeten</h1>
-        <ForgotForm />
-      </main>
-    </>
+    <AuthShell title="Wachtwoord vergeten" sub="We sturen een link naar het e-mailadres van je account.">
+      <ForgotForm />
+    </AuthShell>
   );
 }

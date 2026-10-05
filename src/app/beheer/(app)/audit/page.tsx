@@ -16,6 +16,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
       <p className="muted">Wie deed wat en wanneer. Bevat nooit wachtwoorden, tokens of onnodige persoonsgegevens. Bewaartermijn: configureerbaar (standaard 730 dagen).</p>
       <form method="get" className="card" role="search"><label htmlFor="a">Filter op actie (bijv. pass, member, staff)</label><input id="a" name="action" defaultValue={sp.action ?? ""} maxLength={40} /><p><button>Filteren</button></p></form>
       <p className="muted">{total} gebeurtenissen</p>
+      <div className="table-wrap">
       <table>
         <thead><tr><th scope="col">Tijd</th><th scope="col">Actie</th><th scope="col">Door</th><th scope="col">Doel</th><th scope="col">Details</th></tr></thead>
         <tbody>
@@ -24,6 +25,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
           ))}
         </tbody>
       </table>
+      </div>
       <nav className="row" aria-label="Paginering" style={{ marginTop: 12 }}>
         {page > 1 && <Link className="btn secondary" href={href(page - 1)}>Vorige</Link>}
         <span>Pagina {page} van {pages}</span>

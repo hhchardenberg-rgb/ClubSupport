@@ -1,5 +1,5 @@
 import { SetPasswordForm } from "@/components/AccountForms";
-import { SiteHeader } from "@/components/SiteHeader";
+import { AuthShell } from "@/components/AuthShell";
 import { isLinkUsable } from "@/server/activation";
 
 export const metadata = { title: "Account activeren" };
@@ -9,16 +9,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
   const { token } = await searchParams;
   const ok = await isLinkUsable(token, "activation");
   return (
-    <>
-      <SiteHeader />
-      <main id="main">
-        <h1>Account activeren</h1>
-        {ok && token ? (
-          <SetPasswordForm token={token} purpose="activation" />
-        ) : (
-          <div className="card" role="alert"><p>Deze link is ongeldig of verlopen. Vraag een beheerder om een nieuwe uitnodiging.</p></div>
-        )}
-      </main>
-    </>
+    <AuthShell title="Account activeren" sub="Kies een wachtwoord om je account te gebruiken.">
+      {ok && token ? <SetPasswordForm token={token} purpose="activation" /> : <div className="card" role="alert"><p>Deze link is ongeldig of verlopen. Vraag een beheerder om een nieuwe uitnodiging.</p></div>}
+    </AuthShell>
   );
 }

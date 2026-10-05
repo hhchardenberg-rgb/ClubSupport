@@ -31,8 +31,29 @@ function html(kind, size, maskable) {
   <div id="i"><div id="c">${corners}${inner}${label}</div></div>`;
 }
 
+import { copyFileSync, mkdirSync } from "node:fs";
+mkdirSync("public/brand", { recursive: true });
+let logoRatio = 0.9;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
 const page = await browser.newPage();
+
+// Logo: bronbestand bewaren en webformaten renderen (verhouding blijft behouden, nooit vervormen).
+if (logoData) {
+  mkdirSync("brand-source", { recursive: true });
+  if (path.resolve(logoPath).startsWith(path.resolve("brand-source")) === false) copyFileSync(logoPath, path.join("brand-source", "HHC_ClubSupport_Logo_RGB" + path.extname(logoPath).toLowerCase()));
+  await page.setContent(`<img id="l" src="${logoData}">`);
+  await page.waitForFunction(() => document.getElementById("l").complete);
+  const dim = await page.evaluate(() => ({ w: document.getElementById("l").naturalWidth, h: document.getElementById("l").naturalHeight }));
+  logoRatio = dim.w && dim.h ? dim.w / dim.h : 0.9;
+  for (const [file, h] of [["logo.png", 512], ["logo-email.png", 160], ["logo-small.png", 96]]) {
+    const w = Math.round(h * logoRatio);
+    await page.setViewportSize({ width: w, height: h });
+    await page.setContent(`<style>html,body{margin:0;background:transparent}img{display:block;width:${w}px;height:${h}px}</style><img src="${logoData}">`);
+    await page.waitForFunction(() => document.images[0].complete);
+    writeFileSync(path.join("public/brand", file), await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h }, omitBackground: true }));
+  }
+  // favicon (32px) en grote OG-achtige afbeelding blijven bewust achterwege; favicon = icoon 192
+}
 async function render(kind, size, file, maskable = false) {
   await page.setViewportSize({ width: size, height: size });
   await page.setContent(html(kind, size, maskable));
@@ -64,6 +85,10 @@ const assets = {
   "logo.png": await box(160, 50, logoInner(50), "transparent"),
   "logo@2x.png": await box(320, 100, logoInner(100), "transparent"),
 };
+writeFileSync(
+  "src/lib/brand.generated.ts",
+  `// GEGENEREERD door scripts/make-icons.mjs — niet met de hand bewerken.\nexport const BRAND: { logo: string | null; logoEmail: string | null; ratio: number } = ${JSON.stringify({ logo: logoData ? "/brand/logo.png" : null, logoEmail: logoData ? "/brand/logo-email.png" : null, ratio: Number(logoRatio.toFixed(4)) })};\n`,
+);
 writeFileSync("src/wallet/assets.generated.ts", `// GEGENEREERD door scripts/make-icons.mjs — niet met de hand bewerken.\nexport const WALLET_ASSETS: Record<string, string> = ${JSON.stringify(assets, null, 2)};\n`);
 await browser.close();
 console.log("iconen geschreven in public/icons en src/wallet/assets.generated.ts");

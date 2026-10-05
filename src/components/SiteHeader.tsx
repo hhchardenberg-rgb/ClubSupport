@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Logo } from "./Logo";
 
 const NAMES = { scanner: "Scanner", beheer: "Beheer" } as const;
 
@@ -7,9 +8,9 @@ export function SiteHeader({ area, children }: { area?: keyof typeof NAMES; chil
   return (
     <header className="site-header">
       <div className="in">
-        <Link className="brand" href={area ? `/${area}` : "/"}>
-          HHC <span>ClubSupport</span>
-          {area ? <> · {NAMES[area]}</> : null}
+        <Link className="brand" href={area ? `/${area}` : "/"} aria-label={area ? `HHC ClubSupport ${NAMES[area]}` : "HHC ClubSupport Ledenpas"}>
+          <Logo height={44} />
+          {area ? <span className="area">{NAMES[area]}</span> : null}
         </Link>
         {children}
       </div>

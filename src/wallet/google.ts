@@ -2,6 +2,7 @@ import "server-only";
 import { SignJWT, importPKCS8 } from "jose";
 import { GoogleAuth } from "google-auth-library";
 import { env } from "@/lib/env";
+import { BRAND } from "@/lib/brand.generated";
 import { WalletNotConfigured } from "./apple";
 
 type ServiceAccount = { client_email: string; private_key: string };
@@ -34,6 +35,7 @@ export function genericObject(cfg: ReturnType<typeof googleConfig>, input: { pas
     textModulesData: [{ id: "memberNumber", header: "LIDNUMMER", body: input.memberNumber }],
     barcode: { type: "QR_CODE", value: input.token }, // geen alternateText: toont anders de token
     hexBackgroundColor: "#000000",
+    ...(BRAND.logo ? { logo: { sourceUri: { uri: `${env.appUrl}${BRAND.logo}` }, contentDescription: { defaultValue: { language: "nl", value: "HHC ClubSupport" } } } } : {}),
   };
 }
 

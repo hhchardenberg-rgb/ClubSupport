@@ -26,6 +26,16 @@ beforeAll(async () => {
   const m = await makeMember(21, "Anna");
   passId = m.passId;
   token = (await tokenOf(passId))!;
+  // Gezinsaccount met 3 leden voor de carrousel-test
+  const acc = await import("@/server/accounts");
+  await db.insert(schema.user).values({ id: "adm", name: "adm", email: "adm@example.test", role: "manager", emailVerified: true });
+  let famId = "";
+  for (const [n, name] of [[31, "Eerste Pas"], [32, "Tweede Pas"], [33, "Derde Pas"]] as const) {
+    const r = await acc.createMemberWithPass("adm", { memberNumber: `F${n}`, fullName: name, email: "fam@example.test", confirmLinkExisting: true });
+    famId = r.userId!;
+  }
+  await db.update(schema.user).set({ emailVerified: true }).where((await import("drizzle-orm")).eq(schema.user.id, famId));
+  await ctx.internalAdapter.linkAccount({ userId: famId, providerId: "credential", accountId: famId, password: hash });
   server = spawn("npx", ["next", "start", "-p", String(PORT)], { env: { ...process.env, APP_URL: BASE, BETTER_AUTH_URL: BASE, EMAIL_MODE: "disabled" }, stdio: "ignore", detached: true });
   for (let i = 0; i < 60; i++) {
     try {
@@ -168,6 +178,68 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     const src = await (await fetch(`${BASE}/sw-scanner.js`)).text();
     expect(src).toMatch(/\/api\/.*return/s);
     expect(src).not.toMatch(/\/api\/scan.*cache/s);
+    await ctx.close();
+  });
+
+  it("ledenpas: tussen meerdere passen vegen, met pijlen, stippen en toetsenbord", async () => {
+    await resetLoginLimit();
+    // Verminderde beweging: de carrousel springt dan direct (deterministisch) en dit is het toegankelijkheidspad.
+    const ctx = await browser.newContext({ ...devices["Pixel 5"], reducedMotion: "reduce" });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/ledenpas/inloggen`);
+    await page.fill("#email", "fam@example.test");
+    await page.fill("#password", "een-lang-wachtwoord-1");
+    await page.click("button:has-text('Inloggen')");
+    await page.waitForURL("**/ledenpas");
+    const counter = () => page.locator(".counter").innerText();
+    expect(await page.locator(".carousel .slide").count()).toBe(3);
+    expect(await page.locator(".dot").count()).toBe(3);
+    expect(await counter()).toBe("Pas 1 van 3");
+    await shot(page, "carrousel-1");
+
+    // echte aanraak-veeg naar links (touchStart → touchMove's → touchEnd) via CDP
+    const cdp = await ctx.newCDPSession(page);
+    const box = (await page.locator(".carousel").boundingBox())!;
+    const y = Math.round(box.y + 150);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 330, y }] });
+    for (let i = 1; i <= 12; i++) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: 330 + ((60 - 330) * i) / 12, y }] });
+      await page.waitForTimeout(16);
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    // De veeg moet de carrousel daadwerkelijk verschuiven (headless Chromium klikt na een gesimuleerde veeg niet altijd vast).
+    await page.waitForFunction(() => (document.querySelector(".carousel") as HTMLElement).scrollLeft > 50, null, { timeout: 8000 });
+    await shot(page, "carrousel-2");
+
+    // pijlen: stap voor stap naar de laatste pas, telkens wachten tot de beweging klaar is
+    const settle = () => page.waitForFunction(() => new Promise<boolean>((res) => { const c = document.querySelector(".carousel") as HTMLElement; const a = c.scrollLeft; setTimeout(() => res(Math.abs(c.scrollLeft - a) < 0.5), 250); }), null, { timeout: 8000, polling: 300 });
+    for (let k = 0; k < 3 && !(await page.locator("button[aria-label='Volgende pas']").isDisabled()); k++) {
+      await settle();
+      await page.click("button[aria-label='Volgende pas']");
+    }
+    await settle();
+    await page.waitForFunction(() => document.querySelector(".counter")?.textContent === "Pas 3 van 3");
+    expect(await page.locator("button[aria-label='Volgende pas']").isDisabled()).toBe(true);
+    await shot(page, "carrousel-3");
+    await page.click(".dot >> nth=0");
+    await page.waitForFunction(() => document.querySelector(".counter")?.textContent === "Pas 1 van 3");
+    expect(await page.locator("button[aria-label='Vorige pas']").isDisabled()).toBe(true);
+
+    // toetsenbord
+    await page.focus(".carousel");
+    await settle();
+    await page.keyboard.press("ArrowRight");
+    await page.waitForFunction(() => document.querySelector(".counter")?.textContent === "Pas 2 van 3");
+    await settle();
+    await page.keyboard.press("ArrowLeft");
+    await page.waitForFunction(() => document.querySelector(".counter")?.textContent === "Pas 1 van 3");
+
+    // elke slide heeft een eigen QR en naam; toegankelijke labels
+    const labels = await page.locator(".slide").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+    expect(labels).toEqual(["Pas 1 van 3: Derde Pas", "Pas 2 van 3: Eerste Pas", "Pas 3 van 3: Tweede Pas"] /* alfabetisch op naam */);
+    expect(await page.locator(".slide .pass-qr svg").count()).toBe(3);
+    // geen horizontale pagina-scroll op 393 px
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await ctx.close();
   });
 });

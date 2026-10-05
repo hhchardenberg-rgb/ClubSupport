@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { BRAND } from "@/lib/brand.generated";
 
 /** Korte, minimale mails. Geen QR-token, geen wallet-bestand, geen wachtwoord. */
 export type Mail = { subject: string; text: string; html: string };
@@ -7,7 +8,9 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 
 function wrap(title: string, bodyHtml: string) {
   return `<!doctype html><html lang="nl"><body style="margin:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;color:#000">
-<div style="background:#000;color:#fff;padding:14px 20px;border-bottom:6px solid #ff6600;font-weight:bold;letter-spacing:.5px">HHC <span style="color:#ff6600">CLUBSUPPORT</span></div>
+<div style="background:#000;color:#fff;padding:14px 20px;border-bottom:6px solid #ff6600;font-weight:bold;letter-spacing:.5px">${
+  BRAND.logoEmail ? `<img src="${env.appUrl}${BRAND.logoEmail}" alt="HHC ClubSupport" height="56" style="display:block;height:56px;width:auto">` : `HHC <span style="color:#ff6600">CLUBSUPPORT</span>`
+}</div>
 <div style="max-width:560px;margin:0 auto;padding:20px;background:#fff"><h1 style="font-size:20px;margin:0 0 12px">${esc(title)}</h1>${bodyHtml}</div></body></html>`;
 }
 

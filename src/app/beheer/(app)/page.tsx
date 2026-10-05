@@ -20,9 +20,9 @@ export default async function Page() {
           ["Scans (24 uur)", c.scans_24h],
           ["Mailproblemen", c.mail_problems],
         ].map(([l, n]) => (
-          <div key={String(l)} className="card" style={{ flex: "1 1 150px", margin: 0 }}>
+          <div key={String(l)} className="card stat">
             <div className="muted">{l}</div>
-            <div style={{ fontSize: "2rem", fontWeight: 700 }}>{n}</div>
+            <div className="n">{n}</div>
           </div>
         ))}
       </div>

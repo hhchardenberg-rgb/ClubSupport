@@ -5,6 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "HHC ClubSupport", template: "%s · HHC ClubSupport" },
   description: "Je digitale ledenpas van supportersvereniging HHC ClubSupport.",
+  icons: { icon: "/icons/ledenpas-192.png", apple: "/icons/apple-touch-ledenpas.png" },
 };
 export const viewport: Viewport = { themeColor: "#000000", width: "device-width", initialScale: 1 };
 
