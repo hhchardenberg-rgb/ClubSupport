@@ -153,3 +153,43 @@ describe("scan-endpoint (tests 2, 7, 9)", () => {
     expect(limited).toBeGreaterThan(0);
   });
 });
+
+describe("wallet-endpoints en ledentoegang (tests 3, 10, 11)", () => {
+  it("lid ziet alleen eigen gekoppelde passen; andermans pas-id geeft 404; niet geconfigureerd geeft duidelijke melding", async () => {
+    const { db, schema } = await import("@/db");
+    const { makeMember } = await import("../tests/helpers");
+    const mine = await makeMember(11, "Mijn Lid");
+    const other = await makeMember(12, "Ander Lid");
+    await db.insert(schema.accountMemberAccess).values({ userId: "member", memberId: mine.member.id, grantedBy: "manager" });
+    const get2 = async (p: string, who?: string) => {
+      const r = await fetch(BASE + p, { redirect: "manual", headers: who ? { cookie: cookies[who] } : {} });
+      return { status: r.status, body: await r.json().catch(() => null) };
+    };
+    for (const w of ["apple", "google"]) {
+      expect((await get2(`/api/wallet/${w}/${mine.passId}`)).status, `${w} zonder sessie`).toBe(401);
+      expect((await get2(`/api/wallet/${w}/${other.passId}`, "member")).status, `${w} andermans pas`).toBe(404);
+      expect((await get2(`/api/wallet/${w}/niet-een-uuid`, "member")).status).toBe(404);
+      const own = await get2(`/api/wallet/${w}/${mine.passId}`, "member");
+      expect(own.status, `${w} niet geconfigureerd`).toBe(503);
+      expect(own.body.message).toMatch(/nog niet ingericht/);
+    }
+    const page = await fetch(BASE + "/ledenpas", { headers: { cookie: cookies.member } });
+    const html = await page.text();
+    expect(html).toContain("Mijn Lid 11");
+    expect(html).not.toContain("Ander Lid 12");
+    expect(html).toMatch(/Apple Wallet en Google Wallet zijn nog niet beschikbaar/);
+  });
+
+  it("gedeactiveerde pas is niet meer via Wallet op te halen en toont geen QR", async () => {
+    const { db, schema } = await import("@/db");
+    const { makeMember } = await import("../tests/helpers");
+    const { deactivatePass } = await import("@/server/passes");
+    const m = await makeMember(13, "Gedeactiveerd Lid");
+    await db.insert(schema.accountMemberAccess).values({ userId: "member", memberId: m.member.id, grantedBy: "manager" });
+    await deactivatePass(m.passId, "manager", "test");
+    const r = await fetch(`${BASE}/api/wallet/apple/${m.passId}`, { headers: { cookie: cookies.member } });
+    expect(r.status).toBe(404);
+    const html = await (await fetch(BASE + "/ledenpas", { headers: { cookie: cookies.member } })).text();
+    expect(html).toContain("niet actief");
+  });
+});

@@ -12,6 +12,7 @@ import { requireStaff } from "@/lib/session";
 import { createMemberWithPass, isValidEmail, linkMemberToAccount, normalizeEmail, previewAccountForEmail, unlinkMemberFromAccount } from "@/server/accounts";
 import { processOutbox, resendInvitation } from "@/server/email/outbox";
 import { commitImport, previewImport } from "@/server/import";
+import { syncGoogleForMember } from "@/server/wallet-sync";
 import { DomainError, deactivatePass, deleteMember, reactivatePass, reissuePass, revokePass } from "@/server/passes";
 
 export type FormState = { error?: string; needsConfirm?: { email: string; members: { memberNumber: string; fullName: string }[]; isNewAccount: boolean } } | undefined;
@@ -89,6 +90,7 @@ export async function deactivateAction(f: FormData) {
   await flow(`/beheer/leden/${id}`, async () => {
     if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig de actie met het vinkje.");
     await deactivatePass(str(f, "passId"), s.user.id, str(f, "reason"));
+    await syncGoogleForMember(str(f, "memberId") || id);
     return "Pas gedeactiveerd. De QR-code is direct ongeldig.";
   });
 }
@@ -99,6 +101,7 @@ export async function reactivateAction(f: FormData) {
   await flow(`/beheer/leden/${id}`, async () => {
     if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig de actie met het vinkje.");
     await reactivatePass(str(f, "passId"), s.user.id, str(f, "reason"));
+    await syncGoogleForMember(str(f, "memberId") || id);
     return "Pas opnieuw geactiveerd.";
   });
 }
@@ -111,6 +114,7 @@ export async function reissueAction(f: FormData) {
     const reason = str(f, "kind");
     if (!["reissued", "lost", "leaked"].includes(reason)) throw new DomainError("v", "Kies een reden.");
     await reissuePass(id, s.user.id, reason as "reissued" | "lost" | "leaked", str(f, "reason"));
+    await syncGoogleForMember(str(f, "memberId") || id);
     return "Nieuwe pas uitgegeven. De oude QR-code is definitief ingetrokken.";
   });
 }
@@ -121,6 +125,7 @@ export async function revokeAction(f: FormData) {
   await flow(`/beheer/leden/${id}`, async () => {
     if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig de actie met het vinkje.");
     await revokePass(str(f, "passId"), s.user.id, "admin", str(f, "reason"));
+    await syncGoogleForMember(str(f, "memberId") || id);
     return "Pas definitief ingetrokken.";
   });
 }
@@ -132,6 +137,7 @@ export async function deleteMemberAction(f: FormData) {
   await flow(`/beheer/leden/${id}`, async () => {
     if (str(f, "typed") !== "VERWIJDER") throw new DomainError("confirm", "Typ VERWIJDER om te bevestigen.");
     await deleteMember(id, s.user.id, str(f, "reason"));
+    await syncGoogleForMember(str(f, "memberId") || id);
     return "Lid verwijderd; de pas is direct ongeldig.";
   });
 }

@@ -46,5 +46,24 @@ for (const kind of ["ledenpas", "scanner"]) {
   await render(kind, 512, `${kind}-maskable-512.png`, true);
   await render(kind, 180, `apple-touch-${kind}.png`, true);
 }
+
+// Wallet-afbeeldingen (Apple pass: icon + logo) als base64-module, zodat serverless geen bestanden hoeft te lezen.
+async function box(w, h, inner, bg) {
+  await page.setViewportSize({ width: w, height: h });
+  await page.setContent(`<style>@font-face{font-family:DIN;src:url(data:font/woff2;base64,${font}) format("woff2");font-weight:900}html,body{margin:0;background:${bg}}#b{width:${w}px;height:${h}px;display:flex;align-items:center;justify-content:center}</style><div id="b">${inner}</div>`);
+  await page.evaluate(() => document.fonts.ready);
+  if (logoData) await page.waitForFunction(() => [...document.images].every((i) => i.complete));
+  return (await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h }, omitBackground: bg === "transparent" })).toString("base64");
+}
+const iconInner = (s) => (logoData ? `<img src="${logoData}" style="height:90%">` : `<div style="font:900 ${s * 0.42}px DIN;color:#ff6600">HHC</div>`);
+const logoInner = (h) => (logoData ? `<img src="${logoData}" style="height:100%">` : `<div style="font:900 ${h * 0.7}px DIN;color:#fff;letter-spacing:1px">HHC <span style="color:#ff6600">CLUBSUPPORT</span></div>`);
+const assets = {
+  "icon.png": await box(29, 29, iconInner(29), "#000"),
+  "icon@2x.png": await box(58, 58, iconInner(58), "#000"),
+  "icon@3x.png": await box(87, 87, iconInner(87), "#000"),
+  "logo.png": await box(160, 50, logoInner(50), "transparent"),
+  "logo@2x.png": await box(320, 100, logoInner(100), "transparent"),
+};
+writeFileSync("src/wallet/assets.generated.ts", `// GEGENEREERD door scripts/make-icons.mjs — niet met de hand bewerken.\nexport const WALLET_ASSETS: Record<string, string> = ${JSON.stringify(assets, null, 2)};\n`);
 await browser.close();
-console.log("iconen geschreven in public/icons");
+console.log("iconen geschreven in public/icons en src/wallet/assets.generated.ts");
