@@ -8,6 +8,11 @@ async function main() {
     console.log("DATABASE_URL niet gezet — migraties overgeslagen.");
     return;
   }
+  // Alleen productie migreert automatisch bij een deploy; previews delen anders per ongeluk dezelfde database.
+  if (process.env.VERCEL && process.env.VERCEL_ENV !== "production") {
+    console.log("Geen productie-deploy — migraties overgeslagen.");
+    return;
+  }
   const pool = new Pool({ connectionString: url, ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: true } });
   await migrate(drizzle(pool), { migrationsFolder: "./drizzle" });
   await pool.end();
