@@ -7,7 +7,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SignOutButton } from "@/components/SignOutButton";
 import { requireMember } from "@/lib/session";
 import { listMembersForAccount } from "@/server/accounts";
-import { formatDateNl, MEMBERSHIP_LABEL } from "@/lib/membership";
+import { formatDateNl, isFormerMember, MEMBERSHIP_LABEL } from "@/lib/membership";
 import { revealToken } from "@/server/passes";
 
 export const metadata = { title: "Ledenpas" };
@@ -32,7 +32,7 @@ export default async function Page() {
       }
       const range = p.membershipStart || p.membershipEnd ? ` · ${p.membershipStart ? `vanaf ${formatDateNl(p.membershipStart)}` : ""}${p.membershipStart && p.membershipEnd ? " " : ""}${p.membershipEnd ? `t/m ${formatDateNl(p.membershipEnd)}` : ""}` : "";
       const reason: PassItem["reason"] = !p.passId ? "nopass" : p.membership !== "valid" ? "membership" : "pass";
-      return { id: p.passId ?? `lid-${p.memberId}`, name: p.fullName, number: p.memberNumber, active: p.valid, svg, unavailable, reason, membershipLabel: `${MEMBERSHIP_LABEL[p.membership]}${range}` };
+      return { id: p.passId ?? `lid-${p.memberId}`, name: p.fullName, number: p.memberNumber, active: p.valid, svg, unavailable, reason, membershipLabel: `${isFormerMember(p.membership) ? "Oud-lid · " : ""}${MEMBERSHIP_LABEL[p.membership]}${range}` };
     }),
   );
 

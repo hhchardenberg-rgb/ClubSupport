@@ -386,7 +386,7 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
       const tag = device === "Pixel 5" ? "mobiel" : "desktop";
       const pub = await mk(device);
       const p0 = await pub.newPage();
-      for (const [n, u] of [["login-lid", "/ledenpas/inloggen"], ["login-scanner", "/scanner/inloggen"], ["login-beheer", "/beheer/inloggen"], ["vergeten", "/wachtwoord-vergeten"], ["activeren-ongeldig", "/activeren?token=ongeldig"], ["wachtwoord-resetten-ongeldig", "/wachtwoord-resetten?token=ongeldig"]]) {
+      for (const [n, u] of [["login-lid", "/ledenpas/inloggen"], ["login-scanner", "/scanner/inloggen"], ["login-beheer", "/beheer/inloggen"], ["vergeten", "/wachtwoord-vergeten"], ["activeren-ongeldig", "/activeren?token=ongeldig"], ["wachtwoord-resetten-ongeldig", "/wachtwoord-resetten?token=ongeldig"], ["afmelden-ongeldig", "/afmelden/ongeldig"]]) {
         await p0.goto(BASE + u);
         await check(p0, `${tag} ${n}`);
       }
@@ -423,7 +423,8 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
       await login(pb, "beheer", "adm@example.test");
       await db.update(schema.user).set({ twoFactorEnabled: true }).where(eq(schema.user.id, "adm"));
       const [m] = await db.select().from(schema.member).limit(1);
-      for (const [n, u] of [["overzicht", "/beheer"], ["leden", "/beheer/leden"], ["nieuw lid", "/beheer/leden/nieuw"], ["lid", `/beheer/leden/${m.id}?msg=Gelukt`], ["lid foutmelding", `/beheer/leden/${m.id}?err=Fout`], ["import", "/beheer/import"], ["koppelingen", "/beheer/ledenaccounts"], ["leden gearchiveerd filter", "/beheer/leden?status=gearchiveerd&lidmaatschap=ended"]]) {
+      const nlId = await (await import("@/server/newsletter")).createNewsletter("adm", { subject: "A11y nieuwsbrief", body: "## Kop\n\nTekst met https://hhc.example", audience: "everyone" });
+      for (const [n, u] of [["nieuwsbrieven", "/beheer/nieuwsbrieven"], ["nieuwsbrief nieuw", "/beheer/nieuwsbrieven/nieuw"], ["nieuwsbrief concept", `/beheer/nieuwsbrieven/${nlId}`], ["overzicht", "/beheer"], ["leden", "/beheer/leden"], ["nieuw lid", "/beheer/leden/nieuw"], ["lid", `/beheer/leden/${m.id}?msg=Gelukt`], ["lid foutmelding", `/beheer/leden/${m.id}?err=Fout`], ["import", "/beheer/import"], ["koppelingen", "/beheer/ledenaccounts"], ["leden gearchiveerd filter", "/beheer/leden?status=gearchiveerd&lidmaatschap=ended"]]) {
         await pb.goto(BASE + u);
         await check(pb, `${tag} beheer ${n}`);
       }

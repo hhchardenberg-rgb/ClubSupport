@@ -18,6 +18,8 @@ Taal van de interface en documentatie: **Nederlands**. Namen consequent: **HHC C
 - E-mail is **nooit** een identiteit of matchsleutel: nooit leden of accounts samenvoegen of koppelen op e-mail/naam; geen eigenmachtige normalisatie van plus-adressen.
 - Archiveren (omkeerbaar) en verwijderen (na archivering, wissen na bewaartermijn) zijn verschillende handelingen; verwijderen mag nooit accounts of andere leden raken.
 - Een scanuitkomst of ledenweergave bevat nooit de reden van een schorsing/beëindiging of beheerdersnotities.
+- Nieuwsbrieven: nooit ruwe HTML van gebruikers in mails (alleen via `newsletter-render.ts`); elke nieuwsbrief-mail bevat de afmeldlink en List-Unsubscribe-headers; afgemelde adressen krijgen nooit een nieuwsbrief; één mail per e-mailadres; geen e-mailadressen of tekst in audit of logs.
+- Oud-lid is een afgeleide categorie van het lidmaatschap (`memberCategory`), geen opgeslagen status.
 - Geen secrets in de repository; alleen namen in `.env.example`.
 
 - Gebruik de gedeelde UI-onderdelen (`src/components/ui.tsx`, `Logo`, `SiteHeader`, `AuthShell`) en de klassen in `globals.css`; maak geen losse stijlen per pagina. Het logo komt uit `src/lib/brand.generated.ts` (script `scripts/make-icons.mjs`); teken of kleur het logo nooit zelf.

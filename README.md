@@ -107,10 +107,22 @@ Vier afzonderlijke begrippen, met expliciete koppelingen en elk een eigen status
 
 **E-mail is nooit een identiteit**: meerdere leden mogen hetzelfde adres hebben; er wordt nooit automatisch samengevoegd of gekoppeld op e-mail, naam of iets anders. Adressen worden alleen getrimd en naar kleine letters gezet (zoals Better Auth doet); plus-adressen en andere varianten blijven aparte adressen. Bij meerdere leden voor één nieuw account gaat er maximaal één uitnodiging uit (idempotente sleutel per account).
 
+### Oud-leden
+Een **oud-lid** is een lid van wie het lidmaatschap is **beëindigd of verlopen** (einddatum voorbij). Dit is een afgeleide categorie (geen aparte opgeslagen status, dus nooit tegenstrijdig met het lidmaatschap): `lid` (geldig, nog niet gestart, geschorst) · `oud-lid` (beëindigd of verlopen) · `geen` (geen lidmaatschap). Zodra de einddatum voorbij is, wordt iemand automatisch oud-lid; met een nieuw lidmaatschap wordt het lid weer lid. Een oud-lid blijft een volledig ledenrecord (pasgeschiedenis, koppelingen, historie) en kan worden gearchiveerd. In Beheer: filter **Oud-leden** op de ledenlijst, badge *Oud-lid* in lijst en lidpagina, teller op het overzicht, kolom `categorie` in de export, en een eigen doelgroep voor nieuwsbrieven. De pas van een oud-lid is niet geldig (scanregel).
+
+### Nieuwsbrieven
+Module in Beheer (`/beheer/nieuwsbrieven`, recht `newsletter.manage`: ledenbeheer en systeembeheer). Werkwijze: **concept → voorbeeld → testmail naar uzelf → bevestigen → versturen**.
+- **Tekst**: platte tekst met lichte opmaak (lege regel = alinea, `## Kop`, `- ` opsomming, `**vet**`, `[tekst](https://…)` of een los https-adres). Er wordt nooit ruwe HTML overgenomen; alles wordt geëscaped en alleen http(s)-links worden links. Max. 150 tekens onderwerp (geen regeleinden) en 20.000 tekens tekst. Het voorbeeld staat in een sandbox-iframe.
+- **Doelgroepen**: *Leden* (geldig lidmaatschap, niet gearchiveerd), *Oud-leden* (beëindigd of verlopen, ook gearchiveerd), *Iedereen met een e-mailadres* (alle niet-verwijderde leden). Alleen het contactadres van het lid wordt gebruikt; **gedeelde adressen (gezin) ontvangen één mail**; leden zonder adres en verwijderde leden nooit; afgemelde adressen nooit. Vóór het versturen ziet u het aantal ontvangers; dat moet kloppen op het moment van bevestigen.
+- **Verzenden**: concept → *in verzending* → *verstuurd* (of *geannuleerd*). Ontvangers worden vastgelegd per adres (`newsletter_delivery`) en in batches van 25 verstuurd terwijl de beheerpagina open staat (met voortgang); de dagelijkse cron (`/api/cron/outbox`) maakt de rest af en herhaalt mislukte pogingen (max. 5, backoff). Annuleren stopt wat nog wacht; mislukte verzendingen zijn opnieuw te proberen. Een verstuurde nieuwsbrief is niet meer te wijzigen of te verwijderen.
+- **Afmelden (verplicht in elke mail)**: elke mail heeft een afmeldlink met een persoonlijk, niet te raden token (HMAC; niets opgeslagen) én `List-Unsubscribe`/`List-Unsubscribe-Post` voor één-klik afmelden in mailprogramma's. De afmeldpagina muteert pas na een klik (veilig tegen link-prefetching) en toont alleen een gemaskeerd adres. Afmelden geldt per e-mailadres voor **alle nieuwsbrieven** (`newsletter_optout`), niet voor activatie-/reset-/pasmails. Aanmelden (ongedaan maken) is bewust niet in de app: dat vraagt een nieuwe toestemming van de persoon (zie openstaande beslissingen).
+- **Testmodus**: staat `EMAIL_MODE` niet op `live`, dan worden hoogstens **3** mails echt verstuurd (en alleen naar `EMAIL_TEST_RECIPIENT`); de rest wordt als overgeslagen vastgelegd. In `live` gaat de nieuwsbrief naar de echte ontvangers: zet dit pas na verificatie van het afzenderdomein (SPF/DKIM) bij Resend.
+- **Privacy**: per verzending wordt alleen het e-mailadres bewaard (geen naam, geen lidnummer), tot `NEWSLETTER_DELIVERY_RETENTION_DAYS` (standaard 730 dagen; daarna werkt de afmeldlink uit die oude mail niet meer). Afmeldingen worden bewaard zolang de afmelding moet worden gerespecteerd. Het auditlog bevat nooit e-mailadressen of tekst. Optioneel `NEWSLETTER_SENDER_INFO` (afzenderregel onderaan elke mail, bijv. vereniging + adres).
+
 ### CSV-import en -export
 Import in vier stappen: **upload → kolomkoppeling → voorbeeld → bevestigen**. Herkende kolommen: `lidnummer`, `naam`, `email`, `notitie`, `externe_referentie`, `lidmaatschap` (actief/geschorst/beëindigd), `begindatum`, `einddatum` (JJJJ-MM-DD of DD-MM-JJJJ); andere kolomnamen koppelt de beheerder zelf. Matchsleutel voor bestaande leden: **lidnummer** (standaard) of een gekozen **externe referentie**; nooit e-mail. Per rij toont het voorbeeld *nieuw / bijwerken (met velden) / ongewijzigd / fout / te beoordelen*. Gedeelde e-mailadressen zijn toegestaan (groepering ter bevestiging). Dubbele lidnummers in het bestand zijn een fout; een lidnummer dat bij een ander lid hoort of afwijkt van het gematchte lid wordt geweigerd; gearchiveerde/verwijderde leden worden niet bijgewerkt. **Mogelijke dubbele personen** (zelfde naam na normalisatie bij een ander lidnummer) worden gesignaleerd en alleen op expliciete keuze per regel als nieuw lid geïmporteerd — nooit samengevoegd. Bijwerken wijzigt alleen opgegeven (niet-lege) velden, maakt geen account/uitnodiging/pas aan, en leegmaken via import bestaat niet. Verwerken vraagt expliciete bevestiging en gebeurt in één transactie; herhaald importeren geeft geen dubbele leden, passen of uitnodigingen. Het ruwe bestand en het voorbeeld worden na verwerken gewist (en verlopen na 1 uur); het bestand zelf wordt nooit opgeslagen.
 
-Export (`POST /api/beheer/export`, knop op de ledenlijst; recht `members.export`): CSV van de huidige selectie met lidnummer, naam, e-mail, externe referentie, lidmaatschap + datums, passtatus, gearchiveerd en notitie — **nooit tokens**. Origin-controle (CSRF), MFA, limiet 10/uur per account, `no-store`, formule-injectie geneutraliseerd, en elke export staat in het auditlog (filters en aantal, geen persoonsgegevens).
+Export (`POST /api/beheer/export`, knop op de ledenlijst; recht `members.export`): CSV van de huidige selectie met lidnummer, naam, e-mail, externe referentie, categorie (lid/oud-lid/geen), lidmaatschap + datums, passtatus, gearchiveerd en notitie — **nooit tokens**. Origin-controle (CSRF), MFA, limiet 10/uur per account, `no-store`, formule-injectie geneutraliseerd, en elke export staat in het auditlog (filters en aantal, geen persoonsgegevens).
 
 ### Migratie en terugdraaien
 Migratie `drizzle/0004_ledenadministratie.sql` voegt `membership`, `member.external_ref`, `member.archived_at` en `import_batch.raw/mapping` toe en maakt voor **elk bestaand niet-verwijderd lid een lopend lidmaatschap zonder datums** aan (idempotent), zodat bestaande passen en koppelingen na de migratie ongewijzigd geldig blijven. Maak vóór de eerste productiedeploy een Neon-back-up/branch. Terugdraaien: eerst de code van vóór deze wijziging terugzetten en daarna eventueel `drop table membership; alter table member drop column external_ref, drop column archived_at; alter table import_batch drop column raw, drop column mapping;` — zonder de nieuwe code is er geen lidmaatschapscontrole meer. Bestaande leden, passen en accountkoppelingen worden niet gewijzigd.
@@ -138,8 +150,8 @@ In ontwikkeling toont `bootstrap-admin` de activatielink in de terminal; met `EM
 ## Tests
 
 ```bash
-npm test            # 73 unit-/integratietests tegen een lokale Postgres (maakt zelf database clubsupport_test)
-npm run test:e2e    # bouwt en draait 34 end-to-end- en browsertests (Chromium, nepcamera, axe-toegankelijkheidscontrole)
+npm test            # 82 unit-/integratietests tegen een lokale Postgres (maakt zelf database clubsupport_test)
+npm run test:e2e    # bouwt en draait 38 end-to-end- en browsertests (Chromium, nepcamera, axe-toegankelijkheidscontrole)
 ```
 
 Voor Postgres: `TEST_ADMIN_DATABASE_URL` (standaard `postgres://postgres:postgres@localhost:5432/postgres`). Overzicht per vereiste test: [docs/TESTING.md](docs/TESTING.md).
@@ -149,7 +161,7 @@ Voor Postgres: `TEST_ADMIN_DATABASE_URL` (standaard `postgres://postgres:postgre
 1. Project gekoppeld aan de GitHub-repo; productiebranch bepaalt de productie-deploy.
 2. Zet de variabelen uit `.env.example` in Vercel (secrets als *Sensitive*). `DATABASE_URL` komt van de Neon-koppeling.
 3. De build draait `tsx scripts/migrate.ts` en `scripts/bootstrap-admin.ts` en daarna `next build`. **Alleen productie-deploys migreren** (previews niet).
-4. Crons (`vercel.json`): mail-retry en opruimen draaien dagelijks; beveiligd met `CRON_SECRET` (zet een willekeurige waarde van ≥ 16 tekens). Op het Hobby-plan zijn alleen dagelijkse crons mogelijk; direct na een beheeractie wordt de outbox al meteen verwerkt.
+4. Crons (`vercel.json`): mail-retry (incl. afmaken van nieuwsbrieven) en opruimen draaien dagelijks; beveiligd met `CRON_SECRET` (zet een willekeurige waarde van ≥ 16 tekens). Op het Hobby-plan zijn alleen dagelijkse crons mogelijk; direct na een beheeractie wordt de outbox al meteen verwerkt.
 5. **Kies een EU-regio** voor zowel de Neon-database als de functies (`vercel.json` zet `fra1`).
 
 ### Eerste beheerder
@@ -177,10 +189,10 @@ Zonder pas kan de controleur een lid zoeken op naam of lidnummer (minimaal 3 tek
 Met `SEED_DEMO=true` (Production) maakt de build bij de eerste keer drie demo-accounts met **synthetische gegevens** en willekeurige wachtwoorden: één ledenaccount met 1 pas, één met 3 passen en een testcontroleur. De wachtwoorden verschijnen **één keer** in de buildlog (verder niet opgeslagen); bestaande accounts blijven ongemoeid. `SEED_DEMO=reset` maakt nieuwe, `SEED_DEMO=remove` verwijdert alle demo-gegevens. **Verwijder de demo-accounts vóór echte leden worden ingevoerd** en laat de variabele niet staan: het zijn bekende accounts. Er wordt voor demo-accounts geen e-mail verstuurd.
 
 ### Overige configuratie
-`SCAN_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS`, `DELETED_MEMBER_RETENTION_DAYS`, `REQUIRE_MFA_SCANNER`, `OFFLINE_PASS_MAX_DAYS`, `DB_POOL_MAX` — zie `.env.example`.
+`SCAN_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS`, `DELETED_MEMBER_RETENTION_DAYS`, `REQUIRE_MFA_SCANNER`, `OFFLINE_PASS_MAX_DAYS`, `NEWSLETTER_DELIVERY_RETENTION_DAYS`, `NEWSLETTER_SENDER_INFO`, `DB_POOL_MAX` — zie `.env.example`.
 
 ## Bewaartermijnen
-Standaard: scanlog 90 dagen · auditlog 730 dagen · verwijderde leden 90 dagen daarna definitief gewist (incl. passen en koppelingen) · tokens/importpreviews/rate-limit-rijen/sessies kort · verzonden mails 90 dagen. Dagelijkse opruimjob: `/api/cron/purge`. De club moet deze termijnen vaststellen.
+Standaard: scanlog 90 dagen · auditlog 730 dagen · verwijderde leden 90 dagen daarna definitief gewist (incl. passen en koppelingen) · tokens/importpreviews/rate-limit-rijen/sessies kort · verzonden mails 90 dagen. Verzendregels van nieuwsbrieven 730 dagen na verzending. Dagelijkse opruimjob: `/api/cron/purge`. De club moet deze termijnen vaststellen.
 
 ## Bekende beperkingen
 - **Een statische QR kan worden gekopieerd** (screenshot, foto). Mitigatie: de scanner toont altijd naam en lidnummer ter vergelijking met een legitimatiebewijs, en een gelekte pas kan direct en definitief worden ingetrokken/heruitgegeven. Dit voorkomt screenshots **niet** volledig.

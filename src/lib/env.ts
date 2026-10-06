@@ -30,6 +30,8 @@ export const env = {
   scanRetentionDays: Number(process.env.SCAN_RETENTION_DAYS ?? 90),
   auditRetentionDays: Number(process.env.AUDIT_RETENTION_DAYS ?? 730),
   deletedMemberRetentionDays: Number(process.env.DELETED_MEMBER_RETENTION_DAYS ?? 90),
+  /** Bewaartermijn van verzendregels van nieuwsbrieven (per e-mailadres); daarna werkt de afmeldlink uit die mail niet meer. */
+  newsletterDeliveryRetentionDays: Number(process.env.NEWSLETTER_DELIVERY_RETENTION_DAYS ?? 730),
   requireMfaForScanner: process.env.REQUIRE_MFA_SCANNER === "true",
   /** Hoe lang de offline kopie van passen op het toestel van een lid bruikbaar blijft. */
   offlinePassMaxDays: Math.min(90, Math.max(1, Number(process.env.OFFLINE_PASS_MAX_DAYS ?? 30) || 30)),

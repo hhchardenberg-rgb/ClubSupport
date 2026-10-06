@@ -71,6 +71,22 @@ export function effectiveMembership(rows: MembershipRow[], today: string): Effec
 
 export const isMembershipValid = (e: EffectiveMembership) => e === "valid";
 
+/**
+ * Categorie van een lid, afgeleid van het lidmaatschap (geen aparte opgeslagen status, dus nooit tegenstrijdig):
+ *  - lid     : lidmaatschap geldig, nog niet gestart of geschorst (de persoon hoort (nog) bij de vereniging)
+ *  - oud-lid : lidmaatschap beëindigd of verlopen; zodra de einddatum voorbij is, is iemand automatisch oud-lid
+ *  - geen    : geen lidmaatschap vastgelegd
+ * Een oud-lid blijft een volwaardig ledenrecord (pasgeschiedenis, koppelingen) en kan via een nieuw lidmaatschap weer lid worden.
+ */
+export type MemberCategory = "lid" | "oud-lid" | "geen";
+export const CATEGORY_LABEL: Record<MemberCategory, string> = { lid: "Lid", "oud-lid": "Oud-lid", geen: "Geen lidmaatschap" };
+export function memberCategory(e: EffectiveMembership): MemberCategory {
+  if (e === "ended" || e === "expired") return "oud-lid";
+  if (e === "none") return "geen";
+  return "lid";
+}
+export const isFormerMember = (e: EffectiveMembership) => memberCategory(e) === "oud-lid";
+
 /** YYYY-MM-DD → echte kalenderdatum? Accepteert ook DD-MM-YYYY (import). Geeft ISO terug of null. */
 export function parseDateInput(raw: string): string | null {
   const s = raw.trim();

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Flash, MembershipBadge, PageTitle, StatusBadge } from "@/components/ui";
-import { formatDateNl, MEMBERSHIP_HELP, MEMBERSHIP_LABEL, STORED_LABEL, type MembershipStatus } from "@/lib/membership";
+import { formatDateNl, isFormerMember, MEMBERSHIP_HELP, MEMBERSHIP_LABEL, STORED_LABEL, type MembershipStatus } from "@/lib/membership";
 import { can } from "@/lib/permissions";
 import { requireStaff } from "@/lib/session";
 import { isPassValid } from "@/lib/status";
@@ -52,7 +52,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
     <>
       <PageTitle
         title={m.fullName}
-        sub={<>Lidnummer <strong>{m.memberNumber}</strong>{m.externalRef ? <> · extern <strong>{m.externalRef}</strong></> : null} {deleted ? <Badge tone="bad">Verwijderd</Badge> : archived ? <Badge tone="warn">Gearchiveerd</Badge> : null}</>}
+        sub={<>Lidnummer <strong>{m.memberNumber}</strong>{m.externalRef ? <> · extern <strong>{m.externalRef}</strong></> : null} {deleted ? <Badge tone="bad">Verwijderd</Badge> : archived ? <Badge tone="warn">Gearchiveerd</Badge> : null}{isFormerMember(effective) ? <> <Badge>Oud-lid</Badge></> : null}</>}
         actions={<Link className="btn secondary" href="/beheer/leden">Alle leden</Link>}
       />
       <Flash msg={sp.msg} err={sp.err} />
@@ -82,7 +82,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <section className="card" aria-labelledby="lm">
         <h2 id="lm">Lidmaatschap</h2>
         <p><MembershipBadge status={effective} /> {open ? <span className="muted">Opgeslagen status: {STORED_LABEL[open.status as MembershipStatus]} · {formatDateNl(open.startDate)} t/m {formatDateNl(open.endDate)}</span> : null}</p>
-        <p className="muted">{MEMBERSHIP_HELP[effective]} Datums gelden in de tijdzone Europe/Amsterdam; de einddatum is de laatste geldige dag. Contributiebetaling beïnvloedt de status niet.</p>
+        <p className="muted">{isFormerMember(effective) ? "Dit is een oud-lid: het lidmaatschap is beëindigd of verlopen. Het lid blijft bewaard (pasgeschiedenis, koppelingen) en kan met een nieuw lidmaatschap weer lid worden. " : ""}{MEMBERSHIP_HELP[effective]} Datums gelden in de tijdzone Europe/Amsterdam; de einddatum is de laatste geldige dag. Contributiebetaling beïnvloedt de status niet.</p>
         {canWrite && !deleted && !archived && (
           <>
             {!open && (

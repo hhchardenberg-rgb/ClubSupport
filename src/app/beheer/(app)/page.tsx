@@ -18,6 +18,7 @@ export default async function Page() {
           ["Leden", c.members],
           ["Actieve passen", c.active],
           ["Gedeactiveerd", c.deactivated],
+          ["Oud-leden", Number(c.former_ended) + Number(c.former_expired)],
           ["Scans (24 uur)", c.scans_24h],
           ["Mailproblemen", c.mail_problems],
         ].map(([l, n]) => (

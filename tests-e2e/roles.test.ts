@@ -317,3 +317,70 @@ describe("ledenadministratie (e2e): lidmaatschap, export, koppelingen", () => {
     expect(ended).toContain("Eindkandidaat 92");
   });
 });
+
+describe("nieuwsbrieven en oud-leden (e2e)", () => {
+  it("nieuwsbriefpagina's: alleen ledenbeheer en systeembeheer; lid en scanner niet", async () => {
+    for (const p of ["/beheer/nieuwsbrieven", "/beheer/nieuwsbrieven/nieuw"]) {
+      expect((await get(p, "member")).location, p).toContain("/beheer/geen-toegang");
+      expect((await get(p, "scanner")).location, p).toContain("/beheer/geen-toegang");
+      expect((await get(p)).location, p).toContain("/beheer/inloggen");
+      expect((await get(p, "manager")).status, p).toBe(200);
+      expect((await get(p, "sysadmin")).status, p).toBe(200);
+    }
+    expect((await get("/beheer/nieuwsbrieven/00000000-0000-0000-0000-000000000000", "manager")).status).toBe(404);
+  });
+
+  it("concept: voorbeeld toont opmaak veilig (ge-escapet in een sandbox-iframe) en de ontvangers van de doelgroep", async () => {
+    const { createNewsletter } = await import("@/server/newsletter");
+    const id = await createNewsletter("manager", { subject: "Zomerbrief", body: "Hallo <b>x</b> https://hhc.example", audience: "everyone" });
+    const page = await get(`/beheer/nieuwsbrieven/${id}`, "manager");
+    expect(page.status).toBe(200);
+    expect(page.text).toContain("Zomerbrief");
+    expect(page.text).toContain('sandbox=""');
+    expect(page.text).toContain("&amp;lt;b&amp;gt;x&amp;lt;/b&amp;gt;"); // in srcdoc dubbel geëscaped
+    expect(page.text).not.toContain("<b>x</b>");
+    expect(page.text).toContain("Testmail naar mezelf");
+    expect((await get("/beheer/nieuwsbrieven", "manager")).text).toContain("Zomerbrief");
+  });
+
+  it("afmelden: pagina muteert niets (prefetch-veilig); ongeldig token = foutmelding; één-klik POST werkt alleen met geldig token en alleen via POST", async () => {
+    const { db, schema } = await import("@/db");
+    const nl = await import("@/server/newsletter");
+    const { makeMember } = await import("../tests/helpers");
+    const m = await makeMember(95, "Nieuwsbrieflid");
+    await db.update(schema.member).set({ email: "afmelder@example.test" }).where(eq(schema.member.id, m.member.id));
+    const id = await nl.createNewsletter("manager", { subject: "Afmeldtest", body: "tekst", audience: "everyone" });
+    process.env.EMAIL_MODE = "disabled";
+    const { audienceRecipients } = nl;
+    const count = (await audienceRecipients("everyone")).emails.length;
+    await nl.queueNewsletter("manager", id, { confirm: true, expectedCount: count });
+    const d = (await db.select().from(schema.newsletterDelivery)).find((x) => x.email === "afmelder@example.test")!;
+    const token = nl.unsubscribeToken(d.id);
+    const page = await get(`/afmelden/${token}`);
+    expect(page.status).toBe(200);
+    expect(page.text).toContain("Afmelden voor nieuwsbrieven");
+    expect(page.text).toContain("a**"); // gemaskeerd adres
+    expect(page.text).not.toContain("afmelder@example.test");
+    expect(await db.select().from(schema.newsletterOptout)).toHaveLength(0); // GET muteert niets
+    expect((await get("/afmelden/ongeldig")).text).toContain("ongeldig of verlopen");
+    expect((await fetch(`${BASE}/api/nieuwsbrief/afmelden?token=${token}`)).status).toBe(405); // GET doet niets
+    expect((await fetch(`${BASE}/api/nieuwsbrief/afmelden?token=nep`, { method: "POST" })).status).toBe(404);
+    expect((await fetch(`${BASE}/api/nieuwsbrief/afmelden?token=${token}`, { method: "POST" })).status).toBe(200);
+    expect((await db.select().from(schema.newsletterOptout)).map((o) => o.email)).toEqual(["afmelder@example.test"]);
+    expect((await get(`/afmelden/${token}`)).text).toContain("U bent afgemeld");
+  });
+
+  it("ledenlijst-filter 'oud-leden' en categorie in de export", async () => {
+    const { makeMember } = await import("../tests/helpers");
+    const { changeMembership } = await import("@/server/memberships");
+    const o = await makeMember(96, "Oudlid Kandidaat");
+    await changeMembership("manager", o.member.id, "end", { reason: "opgezegd" });
+    const list = await get("/beheer/leden?q=Oudlid&lidmaatschap=former", "manager");
+    expect(list.text).toContain("Oudlid Kandidaat 96");
+    expect(list.text).toContain("Oud-lid");
+    const res = await fetch(`${BASE}/api/beheer/export`, { method: "POST", headers: { cookie: cookies.manager, Origin: BASE }, body: new URLSearchParams({ q: "T96", membership: "former" }) });
+    const csv = await res.text();
+    expect(csv).toContain('"categorie"');
+    expect(csv).toContain('"Oud-lid"');
+  });
+});

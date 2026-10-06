@@ -307,3 +307,56 @@ export const appRateLimit = pgTable("app_rate_limit", {
   count: integer("count").notNull(),
   windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
 });
+
+/* ------------------------------------------------------------------ */
+/* Nieuwsbrieven                                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Nieuwsbrief. Platte tekst met lichte opmaak (zie `server/email/newsletter-render.ts`); nooit ruwe HTML van gebruikers.
+ * status: draft → sending → sent (of cancelled). Verzonden nieuwsbrieven zijn niet meer te wijzigen.
+ */
+export const newsletter = pgTable(
+  "newsletter",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    /** members (geldig lidmaatschap) | former (oud-leden) | everyone (alle leden met e-mailadres, niet verwijderd) */
+    audience: text("audience").notNull().default("members"),
+    status: text("status").notNull().default("draft"),
+    recipientCount: integer("recipient_count"),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    sentBy: text("sent_by").references(() => user.id, { onDelete: "set null" }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [index("newsletter_status_idx").on(t.status, t.createdAt)],
+);
+
+/** Eén rij per ontvangend e-mailadres (gedeelde adressen krijgen één mail). Snapshot op het moment van verzenden. */
+export const newsletterDelivery = pgTable(
+  "newsletter_delivery",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    newsletterId: uuid("newsletter_id").notNull().references(() => newsletter.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    /** pending | sending | sent | failed | suppressed | cancelled */
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    providerRef: text("provider_ref"),
+    lastError: text("last_error"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("newsletter_delivery_unique").on(t.newsletterId, t.email), index("newsletter_delivery_due_idx").on(t.status, t.nextAttemptAt)],
+);
+
+/** Afmeldingen per e-mailadres (kleine letters). Geldt voor alle nieuwsbrieven, niet voor activatie-/resetmails. */
+export const newsletterOptout = pgTable("newsletter_optout", {
+  email: text("email").primaryKey(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** link | beheer */
+  source: text("source").notNull().default("link"),
+});

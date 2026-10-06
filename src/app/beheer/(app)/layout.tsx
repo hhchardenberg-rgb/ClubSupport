@@ -13,6 +13,7 @@ export default async function BeheerLayout({ children }: { children: React.React
     { href: "/beheer/leden", label: "Leden" },
     ...(can(role, "access.manage") ? [{ href: "/beheer/ledenaccounts", label: "Koppelingen" }] : []),
     ...(can(role, "import") ? [{ href: "/beheer/import", label: "Import" }] : []),
+    ...(can(role, "newsletter.manage") ? [{ href: "/beheer/nieuwsbrieven", label: "Nieuwsbrieven" }] : []),
     ...(can(role, "scanlog.read") ? [{ href: "/beheer/controlelogboek", label: "Controles" }] : []),
     ...(can(role, "staff.manage") ? [{ href: "/beheer/accounts", label: "Accounts" }] : []),
     ...(can(role, "audit.read") ? [{ href: "/beheer/audit", label: "Audit" }] : []),

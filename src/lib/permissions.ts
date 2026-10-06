@@ -17,13 +17,14 @@ export const PERMISSIONS = [
   "access.manage", // account <-> lid koppelen
   "import",
   "email.view",
+  "newsletter.manage", // nieuwsbrieven opstellen, testen en versturen
   "staff.manage", // staf-accounts en rollen
   "audit.read",
   "scanlog.read", // controlelogboek (wie scande/zocht wat en wanneer)
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
-const MANAGER: Permission[] = ["scan", "members.lookup", "scanlog.read", "members.read", "members.write", "members.delete", "members.export", "passes.manage", "access.manage", "import", "email.view"];
+const MANAGER: Permission[] = ["scan", "members.lookup", "scanlog.read", "members.read", "members.write", "members.delete", "members.export", "passes.manage", "access.manage", "import", "email.view", "newsletter.manage"];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   member: ["member.self"],

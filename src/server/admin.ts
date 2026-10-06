@@ -8,7 +8,7 @@ const { member, pass, user, accountMemberAccess, emailOutbox, auditEvent, scanEv
 export const PAGE_SIZE = 25;
 
 export const MEMBER_STATUS_FILTERS = ["actief", "gedeactiveerd", "zonder-pas", "gearchiveerd", "verwijderd"] as const;
-export const MEMBERSHIP_FILTERS = ["valid", "scheduled", "expired", "suspended", "ended", "none"] as const;
+export const MEMBERSHIP_FILTERS = ["valid", "scheduled", "expired", "suspended", "ended", "none", "former"] as const;
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
 
@@ -41,6 +41,8 @@ function memberConditions(opts: MemberFilters, ms: typeof membershipOpen, live: 
     case "suspended": conds.push(sql`${ms.status} = 'suspended'`); break;
     case "ended": conds.push(sql`${ms.id} is null and ${anyEnded}`); break;
     case "none": conds.push(sql`${ms.id} is null and not ${anyEnded}`); break;
+    // Oud-leden: lidmaatschap beëindigd, of actief maar de einddatum is verstreken
+    case "former": conds.push(sql`((${ms.status} = 'active' and ${ms.endDate} < ${today}) or (${ms.id} is null and ${anyEnded}))`); break;
   }
   void live;
   return conds;
@@ -208,6 +210,8 @@ export async function dashboardCounts() {
   const [r] = (await db.execute(sql`
     select
       (select count(*) from member where deleted_at is null)::int as members,
+      (select count(*) from member m where m.deleted_at is null and exists (select 1 from membership e where e.member_id = m.id and e.status = 'ended') and not exists (select 1 from membership o where o.member_id = m.id and o.status in ('active','suspended')))::int as former_ended,
+      (select count(*) from member m join membership o on o.member_id = m.id where m.deleted_at is null and o.status = 'active' and o.end_date < ${amsterdamToday()})::int as former_expired,
       (select count(*) from pass where status = 'active')::int as active,
       (select count(*) from pass where status = 'deactivated')::int as deactivated,
       (select count(*) from email_outbox where status in ('failed','not_sent_no_address'))::int as mail_problems,

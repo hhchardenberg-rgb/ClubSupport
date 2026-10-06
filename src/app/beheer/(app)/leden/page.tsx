@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { EmptyState, MembershipBadge, PageTitle, StatusBadge } from "@/components/ui";
-import { MEMBERSHIP_LABEL } from "@/lib/membership";
+import { Badge, EmptyState, MembershipBadge, PageTitle, StatusBadge } from "@/components/ui";
+import { isFormerMember, MEMBERSHIP_LABEL } from "@/lib/membership";
 import { can } from "@/lib/permissions";
 import { requireStaff } from "@/lib/session";
 import { listMembers, MEMBER_STATUS_FILTERS, MEMBERSHIP_FILTERS } from "@/server/admin";
@@ -29,7 +29,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
             <label htmlFor="lidmaatschap">Lidmaatschap</label>
             <select id="lidmaatschap" name="lidmaatschap" defaultValue={membership ?? ""}>
               <option value="">Alle</option>
-              {MEMBERSHIP_FILTERS.map((f) => <option key={f} value={f}>{MEMBERSHIP_LABEL[f]}</option>)}
+              {MEMBERSHIP_FILTERS.map((f) => <option key={f} value={f}>{f === "former" ? "Oud-leden (beëindigd of verlopen)" : MEMBERSHIP_LABEL[f]}</option>)}
             </select>
           </div>
           <div className="mid">
@@ -61,7 +61,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
               <tr key={r.id}>
                 <td>{r.memberNumber}</td>
                 <td><Link href={`/beheer/leden/${r.id}`}>{r.fullName}</Link>{r.archivedAt ? <span className="muted"> · gearchiveerd</span> : null}</td>
-                <td><MembershipBadge status={r.membership} /></td>
+                <td><MembershipBadge status={r.membership} />{isFormerMember(r.membership) ? <> <Badge>Oud-lid</Badge></> : null}</td>
                 <td><StatusBadge status={r.deletedAt ? "deleted" : r.passStatus === "active" ? "active" : r.passStatus === "deactivated" ? "deactivated" : "none"} /></td>
               </tr>
             ))}

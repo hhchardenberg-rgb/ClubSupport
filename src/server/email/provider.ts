@@ -25,7 +25,7 @@ export async function sendMail(to: string, mail: Mail, idempotencyKey: string): 
   try {
     const resend = new Resend(key);
     const { data, error } = await resend.emails.send(
-      { from: process.env.EMAIL_FROM ?? "HHC ClubSupport <onboarding@resend.dev>", to: recipient, subject, text: mail.text, html: mail.html },
+      { from: process.env.EMAIL_FROM ?? "HHC ClubSupport <onboarding@resend.dev>", to: recipient, subject, text: mail.text, html: mail.html, ...(mail.headers ? { headers: mail.headers } : {}) },
       { idempotencyKey },
     );
     if (error) return { ok: false, error: `${error.name}`.slice(0, 120), permanent: /validation|invalid/i.test(error.name) };

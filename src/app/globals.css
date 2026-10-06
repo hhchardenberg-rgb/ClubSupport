@@ -196,6 +196,8 @@ main{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env
   .pass{box-shadow:none}
 }
 
+textarea.editor{min-height:320px;font-family:inherit;line-height:1.5;resize:vertical}
 /* overzichtsblokken op de lidpagina */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:8px 0 12px}
 .stats .stat{display:flex;flex-direction:column;gap:6px;align-items:flex-start;border:1px solid var(--line);border-left:6px solid var(--orange);border-radius:12px;padding:12px 14px;background:var(--white);overflow-wrap:anywhere}
+textarea.editor{min-height:320px;line-height:1.5;resize:vertical}

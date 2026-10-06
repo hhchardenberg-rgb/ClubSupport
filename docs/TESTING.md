@@ -1,6 +1,6 @@
 # Testoverzicht
 
-Laatste volledige run (lokaal, Postgres 16, Node 22, Chromium): **73 unit-/integratietests + 34 end-to-end-/browsertests, allemaal geslaagd.** De CI-workflow (`.github/workflows/ci.yml`) is geschreven maar nog niet op GitHub gedraaid.
+Laatste volledige run (lokaal, Postgres 16, Node 22, Chromium): **82 unit-/integratietests + 38 end-to-end-/browsertests, allemaal geslaagd.** De CI-workflow (`.github/workflows/ci.yml`) is geschreven maar nog niet op GitHub gedraaid.
 
 ```bash
 npm test          # unit/integratie (tests/*.test.ts)
@@ -44,6 +44,8 @@ Aanvullend gedekt: **zoeken op naam/lidnummer** (`lookup.test.ts`, scanner-UI), 
 | Veilig archiveren/verwijderen zonder cascade (account en ander lid blijven; purge raakt alleen het verwijderde lid) | `members.test.ts` |
 | Export: recht, Origin/CSRF, methode, CSV-header, formule-injectie, geen tokens, audit zonder persoonsgegevens | `roles.test.ts` |
 | Toegankelijkheid van lid-, import-, koppelingen- en gefilterde ledenschermen (axe) | `browser.test.ts` |
+
+**Oud-leden en nieuwsbrieven** (`newsletter.test.ts`, `roles.test.ts`, `browser.test.ts`): categorie lid/oud-lid/geen, filter en teller, nieuw lidmaatschap maakt weer lid · opmaak (escaping, javascript:-links, headers, validatie) · doelgroepen (gedeeld adres één keer, verwijderd/adresloos/afgemeld nooit) · bevestiging + ontvangersaantal, één keer in de wachtrij, precies één mail per ontvanger met eigen afmeldlink, herhaald verwerken verstuurt niets opnieuw · testmodus max. 3 · afmelden (gemanipuleerde tokens, idempotent, wachtende verzendingen vervallen, geen adres in audit, prefetch-veilig, één-klik alleen via POST) · annuleren en opnieuw proberen · testmail · rechten · toegankelijkheid van de nieuwsbriefschermen en afmeldpagina. De provider is in de tests vervangen; er is **niets echt verstuurd**.
 
 Alle testgegevens zijn synthetisch (`example.test`-adressen, verzonnen namen).
 

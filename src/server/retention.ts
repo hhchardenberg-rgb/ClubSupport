@@ -19,6 +19,7 @@ export async function purgeExpiredData() {
   const result = {
     scans: await count(sql`delete from scan_event where at < now() - make_interval(days => ${scanDays})`),
     members: await count(sql`delete from member where deleted_at is not null and deleted_at < now() - make_interval(days => ${memberDays})`),
+    newsletterDeliveries: await count(sql`delete from newsletter_delivery d using newsletter n where n.id = d.newsletter_id and n.status in ('sent','cancelled') and n.sent_at < now() - make_interval(days => ${env.newsletterDeliveryRetentionDays})`),
     tokens: await count(sql`delete from account_token where expires_at < now() - interval '7 days' or used_at < now() - interval '7 days'`),
     importBatches: await count(sql`delete from import_batch where expires_at < now() - interval '1 day' or committed_at < now() - interval '1 day'`),
     rateLimits: await count(sql`delete from app_rate_limit where window_start < now() - interval '1 day'`),

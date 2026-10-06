@@ -1,7 +1,7 @@
 import { audit } from "@/lib/audit";
 import { toCsv } from "@/lib/csv";
 import { clientIp, sameOrigin } from "@/lib/http";
-import { MEMBERSHIP_LABEL } from "@/lib/membership";
+import { CATEGORY_LABEL, MEMBERSHIP_LABEL, memberCategory } from "@/lib/membership";
 import { rateLimit } from "@/lib/ratelimit";
 import { apiStaff } from "@/lib/session";
 import { listMembersForExport, MEMBER_STATUS_FILTERS, MEMBERSHIP_FILTERS } from "@/server/admin";
@@ -30,9 +30,9 @@ export async function POST(req: Request) {
   const rows = await listMembersForExport({ q, status, membership });
   await audit({ actor: session.user.id, action: "members.export", metadata: { rows: rows.length, status: status ?? null, membership: membership ?? null, hasQuery: !!q } });
   const csv = toCsv([
-    ["lidnummer", "naam", "email", "externe_referentie", "lidmaatschap", "begindatum", "einddatum", "pas", "gearchiveerd", "notitie"],
+    ["lidnummer", "naam", "email", "externe_referentie", "categorie", "lidmaatschap", "begindatum", "einddatum", "pas", "gearchiveerd", "notitie"],
     ...rows.map((r) => [
-      r.memberNumber, r.fullName, r.email ?? "", r.externalRef ?? "", MEMBERSHIP_LABEL[r.membership], r.msStart ?? "", r.msEnd ?? "",
+      r.memberNumber, r.fullName, r.email ?? "", r.externalRef ?? "", CATEGORY_LABEL[memberCategory(r.membership)], MEMBERSHIP_LABEL[r.membership], r.msStart ?? "", r.msEnd ?? "",
       r.deletedAt ? "verwijderd" : PASS[r.passStatus ?? ""] ?? "geen", r.archivedAt ? "ja" : "nee", r.note ?? "",
     ]),
   ]);
