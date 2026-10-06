@@ -20,6 +20,11 @@ Taal van de interface en documentatie: **Nederlands**. Namen consequent: **HHC C
 - Een scanuitkomst of ledenweergave bevat nooit de reden van een schorsing/beëindiging of beheerdersnotities.
 - Nieuwsbrieven: nooit ruwe HTML van gebruikers in mails (alleen via `newsletter-render.ts`); elke nieuwsbrief-mail bevat de afmeldlink en List-Unsubscribe-headers; afgemelde adressen krijgen nooit een nieuwsbrief; één mail per e-mailadres; geen e-mailadressen of tekst in audit of logs.
 - Oud-lid is een afgeleide categorie van het lidmaatschap (`memberCategory`), geen opgeslagen status.
+- Velden voor verificatie-/herstelcodes gebruiken altijd `NO_AUTOFILL` (`src/lib/no-autofill.ts`): geen autocomplete, geen herkenbare veldnaam, begint leeg.
+- Passkeys tellen alleen als tweede factor met verplichte gebruikersverificatie (server-side afgedwongen in `auth.ts`); wijzig dat niet zonder opnieuw te beoordelen.
+- Beveiligingsmeldingen (`src/server/security.ts`) bevatten nooit wachtwoorden, codes, e-mailadressen of ruwe IP-adressen; gebruik dedupe-sleutels.
+- Een wijzigingsverzoek voert nooit iets door vóór goedkeuring; verzoeken zijn alleen voor expliciet gekoppelde leden (`listMembersForAccount`).
+- Unieke-indexfouten herken je met `isUniqueViolation` (Drizzle verpakt de pg-fout in `cause`), niet met een regex op `String(e)`.
 - Geen secrets in de repository; alleen namen in `.env.example`.
 
 - Gebruik de gedeelde UI-onderdelen (`src/components/ui.tsx`, `Logo`, `SiteHeader`, `AuthShell`) en de klassen in `globals.css`; maak geen losse stijlen per pagina. Het logo komt uit `src/lib/brand.generated.ts` (script `scripts/make-icons.mjs`); teken of kleur het logo nooit zelf.

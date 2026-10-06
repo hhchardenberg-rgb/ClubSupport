@@ -2,7 +2,8 @@ import Link from "next/link";
 import { can } from "@/lib/permissions";
 import { requireStaff } from "@/lib/session";
 import { dashboardCounts } from "@/server/admin";
-import { PageTitle } from "@/components/ui";
+import { Alert, PageTitle } from "@/components/ui";
+import { openSecurityCount } from "@/server/security";
 
 export const metadata = { title: "Overzicht" };
 
@@ -10,9 +11,11 @@ export default async function Page() {
   const s = await requireStaff("beheer", "members.read");
   const c = await dashboardCounts();
   const role = (s.user as { role?: string }).role;
+  const openAlerts = can(role, "security.read") ? await openSecurityCount() : 0;
   return (
     <>
       <PageTitle title="Overzicht" sub="Leden, passen en scans in één oogopslag." />
+      {openAlerts > 0 && <Alert variant="warning" title={`${openAlerts} openstaande beveiligingsmelding(en)`}><Link href="/beheer/meldingen">Bekijk de meldingen</Link></Alert>}
       <div className="row" style={{ alignItems: "stretch", gap: 14 }}>
         {[
           ["Leden", c.members],

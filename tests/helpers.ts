@@ -7,7 +7,7 @@ process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE
 
 export async function reset() {
   const { db } = await import("@/db");
-  await db.execute(sql`truncate table scan_event, newsletter_delivery, newsletter, newsletter_optout, membership, audit_event, email_outbox, account_token, account_member_access, pass, member, app_rate_limit, import_batch, "user" restart identity cascade`);
+  await db.execute(sql`truncate table scan_event, security_event, change_request, passkey, two_factor, newsletter_delivery, newsletter, newsletter_optout, membership, audit_event, email_outbox, account_token, account_member_access, pass, member, app_rate_limit, import_batch, "user" restart identity cascade`);
 }
 
 export async function makeMember(n = 1, name = "Test Persoon") {

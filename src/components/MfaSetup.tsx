@@ -3,6 +3,7 @@ import { Alert } from "@/components/ui";
 import QRCode from "qrcode";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { NO_AUTOFILL } from "@/lib/no-autofill";
 
 /** MFA (TOTP) inrichten via de identity provider. Verplicht voor beheer-rollen. */
 export function MfaSetup({ area }: { area: "beheer" | "scanner" }) {
@@ -25,12 +26,22 @@ export function MfaSetup({ area }: { area: "beheer" | "scanner" }) {
     setStep("scan");
   }
 
+  async function onPasskey() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const res = await authClient.passkey.addPasskey({ name: "Passkey" });
+    setBusy(false);
+    if (res?.error) return setError("Passkey instellen mislukt of geannuleerd.");
+    window.location.assign(`/${area}`);
+  }
+
   async function onVerify(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (busy) return;
     setBusy(true);
     setError("");
-    const res = await authClient.twoFactor.verifyTotp({ code: String(new FormData(e.currentTarget).get("code")).replace(/\s/g, "") });
+    const res = await authClient.twoFactor.verifyTotp({ code: String(new FormData(e.currentTarget).get("verificatie")).replace(/\s/g, "") });
     setBusy(false);
     if (res.error) return setError("Code onjuist. Probeer de huidige code uit je app.");
     setStep("done");
@@ -47,12 +58,12 @@ export function MfaSetup({ area }: { area: "beheer" | "scanner" }) {
     );
   if (step === "scan")
     return (
-      <form method="post" onSubmit={onVerify} className="card" aria-labelledby="h">
+      <form method="post" onSubmit={onVerify} className="card" aria-labelledby="h" autoComplete="off">
         <h2 id="h">Scan met je authenticator-app</h2>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={qr} alt="QR-code om MFA in te stellen" width={240} height={240} />
-        <label htmlFor="code">Voer de 6-cijferige code in</label>
-        <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9 ]{6,7}" />
+        <label htmlFor="verificatie">Voer de 6-cijferige code in</label>
+        <input id="verificatie" name="verificatie" type="text" inputMode="numeric" required defaultValue="" pattern="[0-9 ]{6,7}" maxLength={7} {...NO_AUTOFILL} />
         {error && <Alert variant="error">{error}</Alert>}
         <p><button disabled={busy}>Bevestigen</button></p>
       </form>
@@ -65,6 +76,9 @@ export function MfaSetup({ area }: { area: "beheer" | "scanner" }) {
       <input id="password" name="password" type="password" autoComplete="current-password" required />
       {error && <Alert variant="error">{error}</Alert>}
       <p><button disabled={busy}>Doorgaan</button></p>
+      <hr />
+      <p className="muted">Liever geen app? Je kunt ook een <strong>passkey</strong> gebruiken (vingerafdruk, gezichtsherkenning of beveiligingssleutel). Een passkey vervangt de authenticator-app.</p>
+      <p><button type="button" className="secondary" disabled={busy} onClick={onPasskey}>Passkey instellen</button></p>
     </form>
   );
 }

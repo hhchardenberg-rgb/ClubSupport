@@ -70,6 +70,25 @@ export const authAccount = pgTable(
   (t) => [index("account_user_idx").on(t.userId)],
 );
 
+/** Passkeys (WebAuthn) via de Better Auth-passkeyplugin. Alleen publieke sleutels; geen geheimen. */
+export const passkey = pgTable(
+  "passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    aaguid: text("aaguid"),
+  },
+  (t) => [index("passkey_user_idx").on(t.userId), index("passkey_credential_idx").on(t.credentialID)],
+);
+
 export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
@@ -243,6 +262,8 @@ export const emailOutbox = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     /** invitation | pass_notice | password_reset */
     kind: text("kind").notNull(),
+    /** Vrije, niet-gevoelige inhoud voor kinds zonder eigen sjabloon-invoer (beveiligingsmeldingen, verzoekresultaat). Nooit tokens of wachtwoorden. */
+    payload: jsonb("payload").$type<Record<string, unknown> | null>(),
     /** Voorkomt dubbele mails: bijv. "invite:<userId>" of "pass-notice:<passId>". */
     idempotencyKey: text("idempotency_key").notNull().unique(),
     userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
@@ -331,6 +352,9 @@ export const newsletter = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     sentBy: text("sent_by").references(() => user.id, { onDelete: "set null" }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    /** Geplande verzending (draft → scheduled). De ontvangers worden pas op het verzendmoment vastgelegd. */
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    scheduleError: text("schedule_error"),
   },
   (t) => [index("newsletter_status_idx").on(t.status, t.createdAt)],
 );
@@ -360,3 +384,54 @@ export const newsletterOptout = pgTable("newsletter_optout", {
   /** link | beheer */
   source: text("source").notNull().default("link"),
 });
+
+/* ------------------------------------------------------------------ */
+/* Beveiligingsmeldingen en wijzigingsverzoeken                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Beveiligingsmeldingen (verdachte activiteit en kritieke wijzigingen). Bevat geen wachtwoorden, tokens of e-mailadressen:
+ * alleen type, ernst, account-id en tellingen. `dedupeKey` voorkomt herhaalde meldingen voor hetzelfde voorval.
+ */
+export const securityEvent = pgTable(
+  "security_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    type: text("type").notNull(),
+    /** info | warning | critical */
+    severity: text("severity").notNull().default("warning"),
+    userId: text("user_id"),
+    dedupeKey: text("dedupe_key").unique(),
+    details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    acknowledgedBy: text("acknowledged_by"),
+  },
+  (t) => [index("security_event_at_idx").on(t.at), index("security_event_open_idx").on(t.acknowledgedAt, t.severity)],
+);
+
+/**
+ * Wijzigingsverzoek van een lid (via het gekoppelde account); de ledenadministratie keurt goed of af.
+ * type: details (naam/contact-e-mail) | cancellation (opzegging per einddatum). Er wordt niets toegepast vóór goedkeuring.
+ */
+export const changeRequest = pgTable(
+  "change_request",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id").notNull().references(() => member.id, { onDelete: "cascade" }),
+    requestedBy: text("requested_by").references(() => user.id, { onDelete: "set null" }),
+    type: text("type").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+    /** pending | approved | rejected | withdrawn */
+    status: text("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decidedBy: text("decided_by").references(() => user.id, { onDelete: "set null" }),
+    decisionNote: text("decision_note"),
+  },
+  (t) => [
+    index("change_request_status_idx").on(t.status, t.createdAt),
+    index("change_request_member_idx").on(t.memberId),
+    uniqueIndex("change_request_one_pending").on(t.memberId, t.type).where(sql`${t.status} = 'pending'`),
+  ],
+);

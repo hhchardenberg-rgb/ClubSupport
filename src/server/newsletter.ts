@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { audit } from "@/lib/audit";
 import { env } from "@/lib/env";
 import { amsterdamToday } from "@/lib/membership";
+import { amsterdamLocalToDate } from "@/lib/time";
 import { rateLimit } from "@/lib/ratelimit";
 import { safeEqual } from "@/lib/tokens";
 import { newsletterMail, validateNewsletter } from "./email/newsletter-render";
@@ -140,21 +141,21 @@ export async function sendTestNewsletter(actor: string, id: string, toEmail: str
  * moet overeenkomen met wat de beheerder zag. Verzenden gebeurt daarna in batches (processNewsletters).
  * In testmodus worden maximaal TEST_MODE_CAP mails echt verstuurd.
  */
-export async function queueNewsletter(actor: string, id: string, opts: { confirm: boolean; expectedCount: number }) {
+export async function queueNewsletter(actor: string, id: string, opts: { confirm: boolean; expectedCount: number | null; fromScheduled?: boolean }) {
   if (!opts.confirm) throw new DomainError("confirm_required", "Bevestig het versturen met het vinkje.");
   const out = await db.transaction(async (tx) => {
     const [n] = await tx.select().from(newsletter).where(eq(newsletter.id, id)).for("update");
     if (!n) throw new DomainError("not_found", "Nieuwsbrief niet gevonden");
-    if (n.status !== "draft") throw new DomainError("not_draft", "Deze nieuwsbrief is al verstuurd of wordt verstuurd.");
+    if (n.status !== (opts.fromScheduled ? "scheduled" : "draft")) throw new DomainError("not_draft", "Deze nieuwsbrief is al verstuurd of wordt verstuurd.");
     const { emails } = await audienceRecipients(n.audience as Audience);
     if (emails.length === 0) throw new DomainError("no_recipients", "Deze doelgroep heeft geen ontvangers.");
-    if (emails.length !== opts.expectedCount) throw new DomainError("count_changed", `Het aantal ontvangers is gewijzigd (nu ${emails.length}). Controleer het overzicht en bevestig opnieuw.`);
+    if (opts.expectedCount !== null && emails.length !== opts.expectedCount) throw new DomainError("count_changed", `Het aantal ontvangers is gewijzigd (nu ${emails.length}). Controleer het overzicht en bevestig opnieuw.`);
     const live = env.emailMode === "live";
     await tx.insert(newsletterDelivery).values(
       emails.map((email, i) => ({ newsletterId: id, email, status: live || i < TEST_MODE_CAP ? "pending" : "suppressed", lastError: live || i < TEST_MODE_CAP ? null : "Testmodus: niet verzonden" })),
     ).onConflictDoNothing();
-    await tx.update(newsletter).set({ status: "sending", recipientCount: emails.length, sentBy: actor, sentAt: new Date(), updatedAt: new Date() }).where(eq(newsletter.id, id));
-    await audit({ actor, action: "newsletter.send", targetType: "newsletter", targetId: id, metadata: { recipients: emails.length, audience: n.audience, mode: env.emailMode } }, tx);
+    await tx.update(newsletter).set({ status: "sending", recipientCount: emails.length, ...(opts.fromScheduled ? {} : { sentBy: actor }), sentAt: new Date(), scheduleError: null, updatedAt: new Date() }).where(eq(newsletter.id, id));
+    await audit({ actor, action: opts.fromScheduled ? "newsletter.send_scheduled" : "newsletter.send", targetType: "newsletter", targetId: id, metadata: { recipients: emails.length, audience: n.audience, mode: env.emailMode } }, tx);
     return { recipients: emails.length };
   });
   return out;
@@ -260,4 +261,59 @@ export async function unsubscribeByToken(token: unknown): Promise<boolean> {
     await audit({ actor: null, action: "newsletter.unsubscribe", targetType: "newsletter_delivery", targetId: id }, tx); // geen e-mailadres in het audit-spoor
   });
   return true;
+}
+
+/* ------------------------------ plannen ------------------------------ */
+
+export const SCHEDULE_MIN_MINUTES = 10;
+
+/**
+ * Plan een concept voor later (tijd in Europe/Amsterdam). De ontvangers worden pas op het verzendmoment bepaald (afmeldingen,
+ * lidmaatschapswijzigingen tot dan toe tellen mee). Het moet minimaal 10 minuten en hooguit een jaar vooruit liggen.
+ * Een geplande nieuwsbrief is niet te wijzigen: annuleer eerst de planning.
+ */
+export async function scheduleNewsletter(actor: string, id: string, localTime: string, confirm: boolean, now = new Date()) {
+  if (!confirm) throw new DomainError("confirm_required", "Bevestig het plannen met het vinkje.");
+  const at = amsterdamLocalToDate(localTime);
+  if (!at) throw new DomainError("invalid_time", "Vul een geldige datum en tijd in.");
+  if (at.getTime() < now.getTime() + SCHEDULE_MIN_MINUTES * 60_000) throw new DomainError("too_soon", `Plan minimaal ${SCHEDULE_MIN_MINUTES} minuten vooruit.`);
+  if (at.getTime() > now.getTime() + 366 * 86_400_000) throw new DomainError("too_far", "Plan hooguit een jaar vooruit.");
+  await db.transaction(async (tx) => {
+    const [n] = await tx.select().from(newsletter).where(eq(newsletter.id, id)).for("update");
+    if (!n) throw new DomainError("not_found", "Nieuwsbrief niet gevonden");
+    if (n.status !== "draft") throw new DomainError("not_draft", "Alleen een concept kan worden gepland.");
+    const { emails } = await audienceRecipients(n.audience as Audience);
+    if (!emails.length) throw new DomainError("no_recipients", "Deze doelgroep heeft nu geen ontvangers.");
+    await tx.update(newsletter).set({ status: "scheduled", scheduledAt: at, scheduleError: null, sentBy: actor, updatedAt: new Date() }).where(eq(newsletter.id, id));
+    await audit({ actor, action: "newsletter.schedule", targetType: "newsletter", targetId: id, metadata: { at: at.toISOString(), audience: n.audience } }, tx);
+  });
+  return at;
+}
+
+export async function unscheduleNewsletter(actor: string, id: string) {
+  const r = await db.update(newsletter).set({ status: "draft", scheduledAt: null, updatedAt: new Date() }).where(and(eq(newsletter.id, id), eq(newsletter.status, "scheduled"))).returning({ id: newsletter.id });
+  if (!r.length) throw new DomainError("not_scheduled", "Deze nieuwsbrief is niet (meer) gepland.");
+  await audit({ actor, action: "newsletter.unschedule", targetType: "newsletter", targetId: id });
+}
+
+/**
+ * Zet nieuwsbrieven waarvan het moment is aangebroken in verzending (voor de rest geldt het gewone batchproces). Wordt aangeroepen
+ * door de dagelijkse cron én zodra een beheerder de nieuwsbriefpagina's opent; elke nieuwsbrief wordt hoogstens één keer gestart.
+ * Heeft de doelgroep op dat moment geen ontvangers, dan wordt het weer een concept met een foutmelding.
+ */
+export async function dispatchDueNewsletters(now = new Date()): Promise<number> {
+  const due = await db.select({ id: newsletter.id, by: newsletter.sentBy }).from(newsletter).where(and(eq(newsletter.status, "scheduled"), lte(newsletter.scheduledAt, now)));
+  let started = 0;
+  for (const n of due) {
+    try {
+      await queueNewsletter(n.by ?? "systeem", n.id, { confirm: true, expectedCount: null, fromScheduled: true });
+      started++;
+    } catch (e) {
+      if (e instanceof DomainError && e.code === "not_draft") continue; // al door een andere aanroep gestart
+      const msg = e instanceof DomainError ? e.message : "Verzenden niet gelukt";
+      await db.update(newsletter).set({ status: "draft", scheduledAt: null, scheduleError: msg, updatedAt: new Date() }).where(and(eq(newsletter.id, n.id), eq(newsletter.status, "scheduled")));
+      await audit({ actor: n.by, action: "newsletter.schedule_failed", targetType: "newsletter", targetId: n.id, metadata: { reason: msg } });
+    }
+  }
+  return started;
 }

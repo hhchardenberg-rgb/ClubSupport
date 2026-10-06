@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/session";
-import { cancelNewsletter, createNewsletter, deleteNewsletterDraft, processNewsletters, queueNewsletter, retryFailedDeliveries, sendTestNewsletter, updateNewsletter } from "@/server/newsletter";
+import { scheduleNewsletter, unscheduleNewsletter, cancelNewsletter, createNewsletter, deleteNewsletterDraft, processNewsletters, queueNewsletter, retryFailedDeliveries, sendTestNewsletter, updateNewsletter } from "@/server/newsletter";
 import { DomainError } from "@/server/passes";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "");
@@ -94,5 +94,23 @@ export async function deleteNewsletterAction(f: FormData) {
     if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig het verwijderen met het vinkje.");
     await deleteNewsletterDraft(s.user.id, id);
     return "Concept verwijderd.";
+  });
+}
+
+export async function scheduleNewsletterAction(f: FormData) {
+  const s = await requireStaff("beheer", "newsletter.manage");
+  const id = str(f, "id");
+  await flow(`/beheer/nieuwsbrieven/${id}`, async () => {
+    const at = await scheduleNewsletter(s.user.id, id, str(f, "at"), f.get("confirm") === "on");
+    return `Gepland voor ${new Intl.DateTimeFormat("nl-NL", { dateStyle: "full", timeStyle: "short", timeZone: "Europe/Amsterdam" }).format(at)}. Verzending volgt bij de eerstvolgende controle na dat tijdstip.`;
+  });
+}
+
+export async function unscheduleNewsletterAction(f: FormData) {
+  const s = await requireStaff("beheer", "newsletter.manage");
+  const id = str(f, "id");
+  await flow(`/beheer/nieuwsbrieven/${id}`, async () => {
+    await unscheduleNewsletter(s.user.id, id);
+    return "Planning geannuleerd; de nieuwsbrief is weer een concept.";
   });
 }

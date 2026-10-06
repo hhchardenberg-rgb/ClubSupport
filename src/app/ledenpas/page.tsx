@@ -1,3 +1,4 @@
+import Link from "next/link";
 import QRCode from "qrcode";
 import { InstallHelp } from "@/components/InstallHelp";
 import { OfflineSync, OfflineToggle } from "@/components/OfflineSync";
@@ -65,6 +66,7 @@ export default async function Page() {
         </p>
         {items.length > 0 && <OfflineToggle items={items} maxDays={env.offlinePassMaxDays} />}
         {items.length > 0 && <OfflineSync items={items} maxDays={env.offlinePassMaxDays} />}
+        <p className="muted"><Link href="/ledenpas/verzoeken">Gegevens wijzigen of opzeggen</Link> · <Link href="/ledenpas/beveiliging">Beveiliging: passkey instellen</Link></p>
         <InstallHelp />
       </main>
     </>

@@ -43,6 +43,13 @@
       "when": 1791319635021,
       "tag": "0005_nieuwsbrieven",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791320460188,
+      "tag": "0006_beveiliging_verzoeken_planning",
+      "breakpoints": true
     }
   ]
 }

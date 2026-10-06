@@ -33,6 +33,15 @@ export function passNoticeMail(p: { name: string }): Mail {
   return { subject, text, html };
 }
 
+/** Algemene korte melding (beveiligingsmeldingen, resultaat van een verzoek). Alleen vaste tekst en tellingen; nooit tokens of wachtwoorden. */
+export type NoticePayload = { title: string; lines: string[]; cta?: { label: string; path: string } };
+export function noticeMail(p: NoticePayload): Mail {
+  const link = p.cta ? `${env.appUrl}${p.cta.path.startsWith("/") ? p.cta.path : `/${p.cta.path}`}` : null;
+  const text = `${p.lines.join("\n\n")}${link ? `\n\n${p.cta!.label}: ${link}` : ""}\n\nDit is een automatisch bericht van HHC ClubSupport.`;
+  const html = wrap(p.title, `${p.lines.map((l) => `<p>${esc(l)}</p>`).join("")}${link ? button(link, p.cta!.label) : ""}<p style="font-size:13px;color:#444">Dit is een automatisch bericht van HHC ClubSupport.</p>`);
+  return { subject: p.title, text, html };
+}
+
 export function resetMail(p: { link: string }): Mail {
   const subject = "Wachtwoord opnieuw instellen";
   const text = `Je hebt gevraagd om je HHC ClubSupport-wachtwoord opnieuw in te stellen.\n\n${p.link}\n\nDeze link is 1 uur geldig en werkt één keer. Heb je dit niet aangevraagd? Dan kun je deze mail negeren.`;

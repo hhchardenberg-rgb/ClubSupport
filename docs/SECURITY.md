@@ -17,6 +17,11 @@ Status: **ontwerp en implementatie getoetst met eigen tests, niet extern geaudit
 | **Upload/CSV-misbruik** | Alleen `.csv`, max 1 MB/5000 rijen; kolomkoppeling op een vaste lijst velden; velden valideren en lengtes begrenzen; waarden als tekst gerenderd (React-escaping), nooit als HTML; export neutraliseert formule-injectie (`csvCell`); ruwe tabel en voorbeeld worden na verwerken gewist en verlopen na 1 uur; expliciete bevestiging; nooit samenvoegen op e-mail/naam | Het tijdelijk bewaarde bestand (≤ 1 uur) bevat persoonsgegevens in de database |
 | **Onbevoegde export / datalek via export** | Recht `members.export` (manager, sysadmin) + MFA; alleen POST met eigen Origin; limiet 10/uur per account; `no-store`; nooit tokens in het bestand; elke export geaudit (filters, aantal; geen persoonsgegevens) | Een bevoegde beheerder kan een export lekken; de club bepaalt wie dit recht krijgt en hoe het bestand wordt bewaard |
 | **Onterecht geldige pas na einde lidmaatschap** | Scan is alleen geldig bij actieve pas **én** geldig lidmaatschap (datums Europe/Amsterdam), zonder lidmaatschap ongeldig; archiveren maakt scans ongeldig; één statusmodule | Een offline kopie of gekopieerde QR toont nog iets op een toestel; alleen de online scanner is leidend. Contributiebetaling is bewust geen invoer |
+| **Verlies van MFA-apparaat / buitensluiting** | Herstelcodes (inloggen en opnieuw aanmaken met wachtwoord), meerdere passkeys, reset door systeembeheer (reden, bevestiging, audit, melding aan betrokkene en alle systeembeheerders; niet voor jezelf), noodscript `scripts/reset-mfa.ts` met database-toegang | Een aanvaller met wachtwoord én social engineering richting systeembeheer; identiteit controleren buiten de app is een procedure, geen code. Houd ≥ 2 systeembeheerders |
+| **Hergebruikte/gelekte wachtwoorden** | Pwned Passwords (k-anonymity) bij instellen, resetten en inloggen; gelekt wachtwoord wordt geweigerd; melding aan het account | Fail-open bij uitval van de dienst; bestaande gelekte wachtwoorden worden pas bij de volgende login gemeld en niet afgedwongen vervangen |
+| **Phishing / wachtwoord-diefstal** | Passkeys (domeingebonden, gebruikersverificatie verplicht) als alternatief en als tweede factor | Een aanvaller met alleen een wachtwoord kan bij eerste inrichting een eigen MFA/passkey registreren (zoals bij elke eerste MFA-inrichting); gebruik uitnodigingslinks van 24 uur en controleer meldingen |
+| **Verdachte activiteit blijft onopgemerkt** | Meldingen met drempels (inlogpogingen, MFA-fouten, scan-raden, scraping, exports, rol-/MFA-wijzigingen) naar systeembeheer en betrokken account; dedupe; teller en banner | Drempels zijn heuristisch; een trage aanval onder de drempel valt niet op. IP-herkomst is een hash, geen locatie |
+| **Wijzigingsverzoek-misbruik** | Alleen voor expliciet gekoppelde leden (server-side), niets doorgevoerd vóór goedkeuring door ledenadministratie, limieten en één open verzoek per type, goedkeuring geweigerd bij staf-adres/archief, alles geaudit | Een lid met toegang tot een gedeeld account kan namens een ander lid een verzoek doen; de beheerder beoordeelt |
 | **Nieuwsbrief: misbruik of onbedoeld massaal versturen** | Alleen recht `newsletter.manage` (manager, sysadmin) + MFA; concept → voorbeeld → testmail → bevestiging met ontvangersaantal dat moet kloppen; atomaire overgang draft → sending (één keer); één regel per adres (unieke index); testmodus verstuurt hoogstens 3 mails; annuleren mogelijk; alles geaudit (aantal, doelgroep, geen adressen/tekst) | Een bevoegde beheerder kan in `live`-modus een foutieve nieuwsbrief versturen; verzonden mails zijn niet terug te halen |
 | **Nieuwsbrief-inhoud (XSS/HTML-/header-injectie)** | Platte tekst met vaste opmaakregels; alles geëscaped, alleen http(s)-links, geen ruwe HTML; onderwerp zonder regeleinden; voorbeeld in `sandbox`-iframe; getest | Mailprogramma's kunnen links of afbeeldingen anders tonen |
 | **Afmelden / spam-klachten** | Elke mail heeft een persoonlijk HMAC-afmeldtoken (niet te raden, niets opgeslagen), `List-Unsubscribe` + één-klik (RFC 8058), afmeldpagina muteert pas na klik (prefetch-veilig), limiet 30/uur/IP, afmelding geldt direct en ook voor wachtende verzendingen; afgemelde adressen nooit in een doelgroep | Afmeldlink van oude mails werkt niet meer na de bewaartermijn van verzendregels (730 dagen); opnieuw aanmelden vraagt een nieuwe toestemming buiten de app |
@@ -37,14 +42,19 @@ Rechten zijn gedefinieerd in `src/lib/permissions.ts` en worden **server-side** 
 | Passen blokkeren, heractiveren, vervangen, intrekken/als verloren markeren | – | – | ✔ | ✔ |
 | Lid definitief verwijderen (na archivering) | – | – | ✔ | ✔ |
 | Ledenlijst exporteren (CSV) | – | – | ✔ | ✔ |
-| Nieuwsbrieven opstellen, testen en versturen | – | – | ✔ | ✔ |
+| Nieuwsbrieven opstellen, testen, plannen en versturen | – | – | ✔ | ✔ |
+| Wijzigingsverzoeken beoordelen | – | – | ✔ | ✔ |
+| Wijzigingsverzoek indienen (eigen gekoppelde leden) | ✔ | – | – | – |
+| Beveiligingsmeldingen inzien en afhandelen | – | – | – | ✔ |
+| MFA van een ander staf-account resetten | – | – | – | ✔ |
+| Eigen passkeys en herstelcodes beheren | ✔ | ✔ | ✔ | ✔ |
 | Account ↔ lid koppelen/ontkoppelen | – | – | ✔ | ✔ |
 | CSV-import (kolomkoppeling, voorbeeld, bevestigen) | – | – | ✔ | ✔ |
 | Koppelingenpagina ledenaccounts | – | – | ✔ | ✔ |
 | Mail-afleverstatus, uitnodiging opnieuw sturen | – | – | ✔ | ✔ |
 | Staf-accounts aanmaken, rol wijzigen, blokkeren, e-mail wijzigen | – | – | – | ✔ |
 | Auditlog inzien | – | – | – | ✔ |
-| MFA verplicht | – | optioneel | ✔ | ✔ |
+| MFA verplicht (authenticator of passkey) | – | optioneel | ✔ | ✔ |
 
 Aanvullende regels: een beheerder kan zijn eigen rol niet wijzigen of zichzelf blokkeren; er blijft altijd ≥ 1 actieve sysadmin; staf-adressen kunnen niet voor ledenaccounts worden gebruikt; een lid kan passtatus of eigen lidnummer nooit wijzigen (er bestaat geen schrijfpad voor leden).
 
@@ -62,7 +72,7 @@ Legenda: **T** = door een geautomatiseerde test gedekt · **I** = geïmplementee
 | V3 Web Frontend Security | T/I | CSP/headers getest (T); cookies; geen secrets in client; `Referrer-Policy`, `Permissions-Policy` (camera alleen op `/scanner`) |
 | V4 API & Web Service | T | Origin-controle, `no-store`, minimale antwoorden, 401/403/404-gedrag getest |
 | V5 File Handling | T/I | CSV-upload: type/grootte/rijen begrensd; bestand wordt niet opgeslagen, alleen gevalideerde rijen tijdelijk |
-| V6 Authentication | T/I/E | Better Auth; activatie/reset eenmalig en gehasht (T); MFA-flow (I, handmatig niet met echt toestel); breach-check **O** |
+| V6 Authentication | T/I/E | Better Auth; activatie/reset eenmalig en gehasht (T); gelekte-wachtwoordcontrole (T, fail-open); passkeys met verplichte gebruikersverificatie (T, virtuele authenticator); herstelcodes en MFA-reset; geen autofill op verificatiecodes (T); MFA-flow met echt toestel **O** |
 | V7 Session Management | T/I | 24 uur sliding; intrekking bij reset/rolwijziging/blokkeren (T); geen cookiecache |
 | V8 Authorization | T | Rollenmatrix e2e getest; IDOR-tests voor leden; **O**: elke server action is niet afzonderlijk met een ruw POST-verzoek getest (guard staat in elke action; zie risico's) |
 | V9 Self-contained Tokens | n.v.t. | Geen JWT's buiten Better Auth-sessies |

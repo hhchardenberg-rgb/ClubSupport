@@ -5,6 +5,7 @@ import { audit } from "@/lib/audit";
 import { canTransition, scanOutcomeFor, type RevocationReason, type ScanOutcome } from "@/lib/status";
 import { decryptToken, encryptToken, generatePassToken, hashToken, isWellFormedPassToken } from "@/lib/tokens";
 import { rateLimit } from "@/lib/ratelimit";
+import { onLookup, onScanSuspect } from "./security";
 import { amsterdamToday, effectiveMembership, isMembershipValid } from "@/lib/membership";
 
 export class DomainError extends Error {
@@ -158,10 +159,12 @@ export async function scanToken(rawToken: unknown, scannerUserId: string): Promi
   // Per controleur: begrenst brute force/enumeratie. (IP-limiet staat in de route.)
   if (!(await rateLimit(`scan:user:${scannerUserId}`, 60, 60))) {
     await db.insert(scanEvent).values({ scannerUserId, outcome: "rate_limited" });
+    await onScanSuspect(scannerUserId);
     return { outcome: "rate_limited" };
   }
   if (!isWellFormedPassToken(rawToken)) {
     await db.insert(scanEvent).values({ scannerUserId, outcome: "unknown" });
+    await onScanSuspect(scannerUserId);
     return { outcome: "unknown" };
   }
   const rows = await db
@@ -173,6 +176,7 @@ export async function scanToken(rawToken: unknown, scannerUserId: string): Promi
   const row = rows[0];
   if (!row) {
     await db.insert(scanEvent).values({ scannerUserId, outcome: "unknown" });
+    await onScanSuspect(scannerUserId);
     return { outcome: "unknown" };
   }
   // Geldig = pas actief EN lidmaatschap nu geldig (datums in Europe/Amsterdam) EN lid niet gearchiveerd/verwijderd.
@@ -214,6 +218,7 @@ export async function lookupMembers(rawQuery: unknown, scannerUserId: string): P
     .orderBy(member.fullName)
     .limit(LOOKUP_MAX_RESULTS + 1);
   await db.insert(scanEvent).values({ scannerUserId, outcome: "lookup", resultCount: rows.length });
+  await onLookup(scannerUserId);
   if (rows.length > LOOKUP_MAX_RESULTS) return { ok: true, results: [], tooMany: true };
   // "active" alleen als pas én lidmaatschap nu geldig zijn; anders "membership" (pas actief, lidmaatschap/archief niet).
   const today = amsterdamToday();

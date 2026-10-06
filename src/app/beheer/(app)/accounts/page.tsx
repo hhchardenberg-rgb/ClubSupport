@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Flash, PageTitle } from "@/components/ui";
 import { requireStaff } from "@/lib/session";
 import { listStaff } from "@/server/admin";
-import { changeRoleAction, changeStaffEmailAction, createStaffAction, resendStaffInviteAction, toggleStaffAction } from "../actions";
+import { resetStaffMfaAction, changeRoleAction, changeStaffEmailAction, createStaffAction, resendStaffInviteAction, toggleStaffAction } from "../actions";
 
 export const metadata = { title: "Accounts" };
 const ROLE: Record<string, string> = { scanner: "Scanner (alleen scannen)", manager: "Ledenbeheer (leden en passen)", sysadmin: "Systeembeheer" };
@@ -43,6 +43,18 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
             <Link className="btn secondary small" href={`/beheer/controlelogboek?scanner=${u.id}`}>Controles</Link>
             <Link className="btn secondary small" href={`/beheer/audit?actor=${u.id}`}>Auditlog</Link>
             {!u.activated && <form action={resendStaffInviteAction}><input type="hidden" name="userId" value={u.id} /><button className="secondary">Uitnodiging opnieuw versturen</button></form>}
+            {u.id !== s.user.id && u.mfa && (
+              <details>
+                <summary>MFA resetten</summary>
+                <form action={resetStaffMfaAction} className="card">
+                  <p className="muted">Voor als {u.name} de telefoon kwijt is en geen herstelcodes meer heeft. Verwijdert authenticator, herstelcodes en passkeys, beëindigt sessies en vereist nieuwe MFA bij de volgende login.</p>
+                  <input type="hidden" name="userId" value={u.id} />
+                  <label htmlFor={`mr-${u.id}`}>Reden</label><input id={`mr-${u.id}`} name="reason" required minLength={3} maxLength={300} />
+                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" name="confirm" required style={{ width: 24, minHeight: 24 }} /> Ik heb de identiteit van deze medewerker gecontroleerd</label>
+                  <p><button className="danger">MFA resetten</button></p>
+                </form>
+              </details>
+            )}
             {u.id !== s.user.id && <form action={toggleStaffAction}><input type="hidden" name="userId" value={u.id} /><input type="hidden" name="disable" value={u.disabledAt ? "0" : "1"} /><button className={u.disabledAt ? "secondary" : "danger"}>{u.disabledAt ? "Weer activeren" : "Blokkeren"}</button></form>}
           </div>
         </section>

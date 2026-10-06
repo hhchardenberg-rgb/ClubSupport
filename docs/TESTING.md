@@ -1,6 +1,6 @@
 # Testoverzicht
 
-Laatste volledige run (lokaal, Postgres 16, Node 22, Chromium): **82 unit-/integratietests + 38 end-to-end-/browsertests, allemaal geslaagd.** De CI-workflow (`.github/workflows/ci.yml`) is geschreven maar nog niet op GitHub gedraaid.
+Laatste volledige run (lokaal, Postgres 16, Node 22, Chromium): **99 unit-/integratietests + 43 end-to-end-/browsertests, allemaal geslaagd.** De CI-workflow (`.github/workflows/ci.yml`) is geschreven maar nog niet op GitHub gedraaid.
 
 ```bash
 npm test          # unit/integratie (tests/*.test.ts)
@@ -46,6 +46,8 @@ Aanvullend gedekt: **zoeken op naam/lidnummer** (`lookup.test.ts`, scanner-UI), 
 | Toegankelijkheid van lid-, import-, koppelingen- en gefilterde ledenschermen (axe) | `browser.test.ts` |
 
 **Oud-leden en nieuwsbrieven** (`newsletter.test.ts`, `roles.test.ts`, `browser.test.ts`): categorie lid/oud-lid/geen, filter en teller, nieuw lidmaatschap maakt weer lid · opmaak (escaping, javascript:-links, headers, validatie) · doelgroepen (gedeeld adres één keer, verwijderd/adresloos/afgemeld nooit) · bevestiging + ontvangersaantal, één keer in de wachtrij, precies één mail per ontvanger met eigen afmeldlink, herhaald verwerken verstuurt niets opnieuw · testmodus max. 3 · afmelden (gemanipuleerde tokens, idempotent, wachtende verzendingen vervallen, geen adres in audit, prefetch-veilig, één-klik alleen via POST) · annuleren en opnieuw proberen · testmail · rechten · toegankelijkheid van de nieuwsbriefschermen en afmeldpagina. De provider is in de tests vervangen; er is **niets echt verstuurd**.
+
+**Beveiliging, verzoeken en plannen** (`security.test.ts`, `requests.test.ts`, `newsletter.test.ts`, `roles.test.ts`, `browser.test.ts`): k-anonymity-aanroep (alleen 5 tekens), treffers/padding/storing/uit · gelekt wachtwoord geweigerd zonder link te verbruiken · drempels en dedupe voor mislukte logins (account én herkomst), MFA-fouten, scan-raden, zoeken, exports (ook buiten kantooruren), gelekt wachtwoord bij login · geen e-mailadres of ruw IP in meldingen · MFA-reset (alles verwijderd, sessies weg, meldingen aan betrokkene en alle systeembeheerders, niet voor jezelf/leden, reden verplicht) · passkey telt als tweede factor · **echte passkey-registratie en -login in Chromium met virtuele authenticator** · **geen autofill-attributen op verificatie- en herstelcodeveld, veld leeg na fout** · wijzigingsverzoeken (IDOR, validatie, één open verzoek, niets gewijzigd vóór goedkeuring, goedkeuren/afwijzen, opzegging per datum, staf-adres/archief geweigerd, meldingen, audit zonder persoonsgegevens) · plannen (tijdzone en zomertijd, grenzen, annuleren, ontvangers pas op het verzendmoment, één keer starten, geen ontvangers → concept) · paginatoegang per rol · toegankelijkheid van de nieuwe schermen (axe). De provider en de Pwned-API zijn in de tests vervangen; er is niets echt verstuurd of opgevraagd.
 
 Alle testgegevens zijn synthetisch (`example.test`-adressen, verzonnen namen).
 

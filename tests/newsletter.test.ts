@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { makeUser, reset } from "./helpers";
 import { amsterdamToday, CATEGORY_LABEL, memberCategory } from "@/lib/membership";
 import { can } from "@/lib/permissions";
+import { formatAmsterdamLocal } from "@/lib/time";
 
 type Sent = { to: string; subject: string; html: string; text: string; headers?: Record<string, string>; key: string };
 const sent: Sent[] = [];
@@ -220,5 +221,72 @@ describe("nieuwsbrief: verzenden", () => {
     const { db, schema } = await import("@/db");
     expect(await db.select().from(schema.newsletterDelivery)).toHaveLength(0);
     void eq;
+  });
+});
+
+describe("nieuwsbrief plannen", () => {
+  it("tijden in Europe/Amsterdam: zomer- en wintertijd, niet-bestaande en ongeldige tijden", async () => {
+    const { amsterdamLocalToDate, formatAmsterdamLocal } = await import("@/lib/time");
+    expect(amsterdamLocalToDate("2026-07-01T09:00")!.toISOString()).toBe("2026-07-01T07:00:00.000Z"); // CEST = UTC+2
+    expect(amsterdamLocalToDate("2026-12-01T09:00")!.toISOString()).toBe("2026-12-01T08:00:00.000Z"); // CET = UTC+1
+    expect(amsterdamLocalToDate("2026-03-29T02:30")).toBeNull(); // bestaat niet (zomertijd-overgang)
+    expect(amsterdamLocalToDate("2026-13-01T09:00")).toBeNull();
+    expect(amsterdamLocalToDate("morgen")).toBeNull();
+    expect(formatAmsterdamLocal(new Date("2026-07-01T07:00:00Z"))).toBe("2026-07-01T09:00");
+  });
+
+  async function draft() {
+    const { admin } = await members();
+    const nl = await import("@/server/newsletter");
+    const id = await nl.createNewsletter(admin, { subject: "Gepland", body: "tekst", audience: "members" });
+    return { nl, id, admin };
+  }
+  const local = (offsetMinutes: number) => {
+    return formatAmsterdamLocal(new Date(Date.now() + offsetMinutes * 60_000));
+  };
+
+  it("plannen vereist bevestiging en een geldig tijdstip (min. 10 minuten, max. een jaar); annuleren maakt er weer een concept van", async () => {
+    const { nl, id, admin } = await draft();
+    await expect(nl.scheduleNewsletter(admin, id, local(120), false)).rejects.toMatchObject({ code: "confirm_required" });
+    await expect(nl.scheduleNewsletter(admin, id, "kapot", true)).rejects.toMatchObject({ code: "invalid_time" });
+    await expect(nl.scheduleNewsletter(admin, id, local(3), true)).rejects.toMatchObject({ code: "too_soon" });
+    await expect(nl.scheduleNewsletter(admin, id, local(60 * 24 * 400), true)).rejects.toMatchObject({ code: "too_far" });
+    await nl.scheduleNewsletter(admin, id, local(120), true);
+    const n = (await nl.getNewsletter(id))!;
+    expect(n.status).toBe("scheduled");
+    await expect(nl.updateNewsletter(admin, id, { subject: "x", body: "y", audience: "members" })).rejects.toMatchObject({ code: "not_draft" });
+    await expect(nl.scheduleNewsletter(admin, id, local(180), true)).rejects.toMatchObject({ code: "not_draft" });
+    expect(await nl.dispatchDueNewsletters()).toBe(0); // nog niet aan de beurt
+    await nl.unscheduleNewsletter(admin, id);
+    expect((await nl.getNewsletter(id))!).toMatchObject({ status: "draft", scheduledAt: null });
+    await expect(nl.unscheduleNewsletter(admin, id)).rejects.toMatchObject({ code: "not_scheduled" });
+  });
+
+  it("op het verzendmoment worden de ontvangers dan bepaald (afmeldingen tellen mee), precies één keer gestart en normaal verstuurd", async () => {
+    const { nl, id, admin } = await draft();
+    await nl.scheduleNewsletter(admin, id, local(60), true);
+    const { db, schema } = await import("@/db");
+    await db.insert(schema.newsletterOptout).values({ email: "geldig@example.test" }); // afgemeld ná het plannen
+    await db.update(schema.newsletter).set({ scheduledAt: new Date(Date.now() - 1000) }).where(eq(schema.newsletter.id, id));
+    expect(await nl.dispatchDueNewsletters()).toBe(1);
+    expect(await nl.dispatchDueNewsletters()).toBe(0); // niet nogmaals
+    expect(await nl.newsletterStats(id)).toMatchObject({ total: 1, pending: 1 }); // alleen het gezinsadres
+    await nl.processNewsletters(10, id);
+    expect(sent.map((s) => s.to)).toEqual(["gezin@example.test"]);
+    expect((await nl.getNewsletter(id))!.status).toBe("sent");
+    expect((await db.select().from(schema.auditEvent)).some((a) => a.action === "newsletter.send_scheduled")).toBe(true);
+  });
+
+  it("geen ontvangers meer op het verzendmoment: terug naar concept met foutmelding, niets verstuurd", async () => {
+    const { nl, id, admin } = await draft();
+    await nl.scheduleNewsletter(admin, id, local(60), true);
+    const { db, schema } = await import("@/db");
+    await db.insert(schema.newsletterOptout).values([{ email: "geldig@example.test" }, { email: "gezin@example.test" }]);
+    await db.update(schema.newsletter).set({ scheduledAt: new Date(Date.now() - 1000) }).where(eq(schema.newsletter.id, id));
+    expect(await nl.dispatchDueNewsletters()).toBe(0);
+    const n = (await nl.getNewsletter(id))!;
+    expect(n).toMatchObject({ status: "draft", scheduledAt: null });
+    expect(n.scheduleError).toMatch(/geen ontvangers/i);
+    expect(sent).toHaveLength(0);
   });
 });

@@ -7,8 +7,9 @@ import { env } from "@/lib/env";
 import { NEWSLETTER_STATUS } from "@/lib/newsletter-status";
 import { requireStaff } from "@/lib/session";
 import { newsletterMail } from "@/server/email/newsletter-render";
-import { AUDIENCE_LABEL, audienceRecipients, getNewsletter, newsletterStats, TEST_MODE_CAP, type Audience } from "@/server/newsletter";
-import { cancelNewsletterAction, deleteNewsletterAction, retryNewsletterAction, sendNewsletterAction, testNewsletterAction } from "../actions";
+import { formatAmsterdamLocal } from "@/lib/time";
+import { AUDIENCE_LABEL, audienceRecipients, dispatchDueNewsletters, getNewsletter, newsletterStats, SCHEDULE_MIN_MINUTES, TEST_MODE_CAP, type Audience } from "@/server/newsletter";
+import { cancelNewsletterAction, deleteNewsletterAction, retryNewsletterAction, scheduleNewsletterAction, sendNewsletterAction, testNewsletterAction, unscheduleNewsletterAction } from "../actions";
 
 export const metadata = { title: "Nieuwsbrief" };
 const fmt = (d: Date | null) => (d ? new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Amsterdam" }).format(d) : "–");
@@ -18,6 +19,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const s = await requireStaff("beheer", "newsletter.manage");
   const { id } = await params;
   const sp = await searchParams;
+  await dispatchDueNewsletters().catch(() => undefined); // een aangebroken planning direct oppakken
   const n = await getNewsletter(id);
   if (!n) notFound();
   const draft = n.status === "draft";
@@ -28,12 +30,20 @@ export default async function Page({ params, searchParams }: { params: Promise<{
 
   return (
     <>
-      <PageTitle title={n.subject} sub={<><Badge tone={st.tone}>{st.label}</Badge> · doelgroep {AUDIENCE_LABEL[n.audience as Audience] ?? n.audience}{n.sentAt ? ` · verstuurd ${fmt(n.sentAt)}` : ""}</>} actions={<Link className="btn secondary" href="/beheer/nieuwsbrieven">Alle nieuwsbrieven</Link>} />
+      <PageTitle title={n.subject} sub={<><Badge tone={st.tone}>{st.label}</Badge> · doelgroep {AUDIENCE_LABEL[n.audience as Audience] ?? n.audience}{n.sentAt ? ` · verstuurd ${fmt(n.sentAt)}` : ""}{n.status === "scheduled" ? ` · gepland ${fmt(n.scheduledAt)}` : ""}</>} actions={<Link className="btn secondary" href="/beheer/nieuwsbrieven">Alle nieuwsbrieven</Link>} />
       <Flash msg={sp.msg} err={sp.err} />
 
+      {n.scheduleError && draft && <Alert variant="error" title="De geplande verzending is niet gelukt">{n.scheduleError} Controleer de nieuwsbrief en plan opnieuw.</Alert>}
+      {n.status === "scheduled" && (
+        <section className="card" aria-labelledby="gp">
+          <h2 id="gp">Gepland</h2>
+          <p>Deze nieuwsbrief wordt verstuurd op <strong>{fmt(n.scheduledAt)}</strong> (Amsterdamse tijd), of bij de eerstvolgende controle daarna. De ontvangers worden op dat moment bepaald. Een geplande nieuwsbrief kan niet worden gewijzigd.</p>
+          <form action={unscheduleNewsletterAction}><input type="hidden" name="id" value={id} /><button className="secondary">Planning annuleren</button></form>
+        </section>
+      )}
       {n.status === "sending" && stats.pending > 0 && <NewsletterProgress id={id} remaining={stats.pending} total={stats.total} />}
 
-      {!draft && (
+      {!draft && n.status !== "scheduled" && (
         <section className="card" aria-labelledby="st">
           <h2 id="st">Verzending</h2>
           <div className="stats">
@@ -87,6 +97,21 @@ export default async function Page({ params, searchParams }: { params: Promise<{
               </form>
             )}
           </section>
+
+          {rec.emails.length > 0 && (
+            <section className="card" aria-labelledby="pl">
+              <h2 id="pl">Plannen</h2>
+              <p>Verstuur de nieuwsbrief op een later moment. De ontvangers (nu {rec.emails.length}) worden pas op het verzendmoment bepaald; afmeldingen tot dan tellen mee.</p>
+              <form action={scheduleNewsletterAction}>
+                <input type="hidden" name="id" value={id} />
+                <label htmlFor="at">Datum en tijd (Amsterdamse tijd, minimaal {SCHEDULE_MIN_MINUTES} minuten vooruit)</label>
+                <input id="at" name="at" type="datetime-local" required min={formatAmsterdamLocal(new Date(Date.now() + SCHEDULE_MIN_MINUTES * 60_000))} />
+                <p className="muted">Het automatische controlemoment draait nu eenmaal per dag (rond 08:15). Een plan voor later die dag wordt daarom bij de eerstvolgende controle verstuurd, of zodra een beheerder daarna deze pagina&apos;s opent.</p>
+                <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 700 }}><input type="checkbox" name="confirm" required style={{ width: 24, minHeight: 24 }} /> Ik heb het voorbeeld gecontroleerd en wil de nieuwsbrief plannen</label>
+                <p><button>Nieuwsbrief plannen</button></p>
+              </form>
+            </section>
+          )}
 
           <form action={deleteNewsletterAction} className="card danger-zone">
             <h2>Concept verwijderen</h2>

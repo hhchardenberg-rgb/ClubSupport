@@ -300,6 +300,79 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await ctx.close();
   });
 
+  it("tweestapsverificatie: de code wordt nooit automatisch ingevuld of voorgesteld (verificatie- en herstelcodeveld)", async () => {
+    await resetLoginLimit();
+    const { db, schema } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const { auth } = await import("@/lib/auth");
+    const ctx = await auth.$context;
+    const hash = await ctx.password.hash("een-lang-wachtwoord-1");
+    await db.insert(schema.user).values({ id: "tfa", name: "Tweefactor", email: "tfa@example.test", role: "scanner", emailVerified: true, twoFactorEnabled: true });
+    await ctx.internalAdapter.linkAccount({ userId: "tfa", providerId: "credential", accountId: "tfa", password: hash });
+    await db.insert(schema.twoFactor).values({ id: "tfa-tf", secret: "x", backupCodes: "y", userId: "tfa" });
+    const c = await browser.newContext({ ...devices["Pixel 5"] });
+    const page = await c.newPage();
+    await page.goto(`${BASE}/scanner/inloggen`);
+    await page.fill("#email", "tfa@example.test");
+    await page.fill("#password", "een-lang-wachtwoord-1");
+    await page.click("button:has-text('Inloggen')");
+    await page.waitForSelector("#verificatie");
+    const attrs = async () => page.locator("#verificatie").evaluate((el: HTMLInputElement) => ({
+      ac: el.getAttribute("autocomplete"), name: el.name, type: el.type, value: el.value, autocorrect: el.getAttribute("autocorrect"), spell: el.getAttribute("spellcheck"),
+      lp: el.getAttribute("data-lpignore"), op: el.getAttribute("data-1p-ignore"), bw: el.getAttribute("data-bwignore"), formAc: el.form!.getAttribute("autocomplete"),
+    }));
+    for (const step of ["totp", "backup"]) {
+      const a = await attrs();
+      expect(a.ac, step).toBe("off");
+      expect(a.ac).not.toBe("one-time-code");
+      expect(a.name).not.toMatch(/code|otp|token/i); // geen veldnaam die browsers/wachtwoordmanagers herkennen
+      expect(a.type).toBe("text");
+      expect(a.value).toBe("");
+      expect(a).toMatchObject({ autocorrect: "off", spell: "false", lp: "true", op: "true", bw: "true", formAc: "off" });
+      if (step === "totp") await page.click("button:has-text('Gebruik een herstelcode')");
+    }
+    // een onjuiste code laat het veld weer leeg en toont een generieke foutmelding
+    await page.fill("#verificatie", "AAAA-BBBBB");
+    await page.click("button:has-text('Bevestigen')");
+    await page.waitForSelector("text=Herstelcode onjuist");
+    expect(await page.locator("#verificatie").inputValue()).toBe("");
+    await c.close();
+    await db.delete(schema.twoFactor).where(eq(schema.twoFactor.userId, "tfa"));
+  });
+
+  it("passkey: instellen als tweede factor, daarna inloggen met alleen de passkey (virtuele authenticator met gebruikersverificatie)", async () => {
+    await resetLoginLimit();
+    const { db, schema } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const ctx = await browser.newContext({ viewport: { width: 1100, height: 900 } });
+    const page = await ctx.newPage();
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send("WebAuthn.enable");
+    await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
+    await db.update(schema.user).set({ twoFactorEnabled: false }).where(eq(schema.user.id, "adm"));
+    await page.goto(`${BASE}/beheer/inloggen`);
+    await page.fill("#email", "adm@example.test");
+    await page.fill("#password", "een-lang-wachtwoord-1");
+    await page.click("button:has-text('Inloggen')");
+    await page.waitForURL("**/beheer/mfa-instellen");
+    await page.click("button:has-text('Passkey instellen')");
+    await page.waitForURL((u) => u.pathname === "/beheer", { timeout: 20000 });
+    expect(await db.select().from(schema.passkey).where(eq(schema.passkey.userId, "adm"))).toHaveLength(1);
+    // zonder TOTP maar mét passkey: geen MFA-instelling meer afgedwongen
+    expect((await page.goto(`${BASE}/beheer/leden`))!.status()).toBe(200);
+    expect(page.url()).toContain("/beheer/leden");
+    // uitloggen en alleen met de passkey inloggen
+    await ctx.clearCookies();
+    await resetLoginLimit();
+    await page.goto(`${BASE}/beheer/inloggen`);
+    await page.click("button:has-text('Inloggen met passkey')");
+    await page.waitForURL((u) => u.pathname === "/beheer", { timeout: 20000 });
+    expect((await page.goto(`${BASE}/beheer/beveiliging`))!.status()).toBe(200);
+    await page.waitForSelector("text=Passkeys");
+    await ctx.close();
+    await db.delete(schema.passkey).where(eq(schema.passkey.userId, "adm"));
+  });
+
   it("beheer: import met eigen kolomnamen, kolomkoppeling, voorbeeld, bevestigen en herhaald importeren zonder dubbelen", async () => {
     await resetLoginLimit();
     const { db, schema } = await import("@/db");
@@ -396,12 +469,19 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
       const pl = await lid.newPage();
       await login(pl, "ledenpas", "fam@example.test");
       await check(pl, `${tag} ledenpas (3 passen)`);
+      for (const [n, u] of [["verzoeken", "/ledenpas/verzoeken"], ["beveiliging", "/ledenpas/beveiliging"]]) {
+        await pl.goto(BASE + u);
+        await check(pl, `${tag} ledenpas ${n}`);
+      }
       await lid.close();
 
       const sc = await mk(device);
       const ps = await sc.newPage();
       await login(ps, "scanner", "scn@example.test");
       await check(ps, `${tag} scanner`);
+      await ps.goto(`${BASE}/scanner/beveiliging`);
+      await check(ps, `${tag} scanner beveiliging`);
+      await ps.goto(`${BASE}/scanner`);
       await ps.fill("#q", "anna");
       await ps.click("button:has-text('Zoeken')");
       await ps.waitForSelector("li:has-text('PAS ')");
@@ -424,10 +504,17 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
       await db.update(schema.user).set({ twoFactorEnabled: true }).where(eq(schema.user.id, "adm"));
       const [m] = await db.select().from(schema.member).limit(1);
       const nlId = await (await import("@/server/newsletter")).createNewsletter("adm", { subject: "A11y nieuwsbrief", body: "## Kop\n\nTekst met https://hhc.example", audience: "everyone" });
-      for (const [n, u] of [["nieuwsbrieven", "/beheer/nieuwsbrieven"], ["nieuwsbrief nieuw", "/beheer/nieuwsbrieven/nieuw"], ["nieuwsbrief concept", `/beheer/nieuwsbrieven/${nlId}`], ["overzicht", "/beheer"], ["leden", "/beheer/leden"], ["nieuw lid", "/beheer/leden/nieuw"], ["lid", `/beheer/leden/${m.id}?msg=Gelukt`], ["lid foutmelding", `/beheer/leden/${m.id}?err=Fout`], ["import", "/beheer/import"], ["koppelingen", "/beheer/ledenaccounts"], ["leden gearchiveerd filter", "/beheer/leden?status=gearchiveerd&lidmaatschap=ended"]]) {
+      for (const [n, u] of [["nieuwsbrieven", "/beheer/nieuwsbrieven"], ["nieuwsbrief nieuw", "/beheer/nieuwsbrieven/nieuw"], ["nieuwsbrief concept", `/beheer/nieuwsbrieven/${nlId}`], ["overzicht", "/beheer"], ["leden", "/beheer/leden"], ["nieuw lid", "/beheer/leden/nieuw"], ["lid", `/beheer/leden/${m.id}?msg=Gelukt`], ["lid foutmelding", `/beheer/leden/${m.id}?err=Fout`], ["import", "/beheer/import"], ["koppelingen", "/beheer/ledenaccounts"], ["verzoeken", "/beheer/verzoeken"], ["beveiliging", "/beheer/beveiliging"], ["leden gearchiveerd filter", "/beheer/leden?status=gearchiveerd&lidmaatschap=ended"]]) {
         await pb.goto(BASE + u);
         await check(pb, `${tag} beheer ${n}`);
       }
+      // systeembeheer-schermen (meldingen, accounts met MFA-reset): rol tijdelijk verhogen
+      await db.update(schema.user).set({ role: "sysadmin" }).where(eq(schema.user.id, "adm"));
+      for (const [n, u] of [["meldingen", "/beheer/meldingen"], ["accounts", "/beheer/accounts"]]) {
+        await pb.goto(BASE + u);
+        await check(pb, `${tag} beheer ${n}`);
+      }
+      await db.update(schema.user).set({ role: "manager" }).where(eq(schema.user.id, "adm"));
       await db.update(schema.user).set({ twoFactorEnabled: false }).where(eq(schema.user.id, "adm"));
       await bh.close();
     }

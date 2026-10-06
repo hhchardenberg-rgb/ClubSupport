@@ -3,6 +3,7 @@ import { db, schema } from "@/db";
 import { auth, PASSWORD_MAX, PASSWORD_MIN } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { hashLinkToken } from "@/lib/tokens";
+import { isPasswordPwned } from "@/lib/pwned";
 
 const { accountToken, user } = schema;
 
@@ -43,6 +44,8 @@ export async function isLinkUsable(token: unknown, purpose: Purpose): Promise<bo
 export async function setPasswordWithToken(token: string, password: string, purpose: Purpose): Promise<{ ok: boolean; error?: string; area?: "ledenpas" | "beheer" | "scanner" }> {
   const pwError = validatePassword(password);
   if (pwError) return { ok: false, error: pwError };
+  // Gelekte wachtwoorden worden geweigerd (vóór het verbruiken van de link, zodat de link bruikbaar blijft).
+  if ((await isPasswordPwned(password)) === true) return { ok: false, error: "Dit wachtwoord komt voor in bekende datalekken. Kies een ander, uniek wachtwoord." };
   const userId = await consumeLinkToken(token, purpose);
   if (!userId) return { ok: false, error: "Deze link is ongeldig of verlopen." };
 

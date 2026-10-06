@@ -3,13 +3,14 @@ import { Alert, Badge, EmptyState, Flash, PageTitle } from "@/components/ui";
 import { env } from "@/lib/env";
 import { NEWSLETTER_STATUS } from "@/lib/newsletter-status";
 import { requireStaff } from "@/lib/session";
-import { AUDIENCE_LABEL, countOptouts, listNewsletters, type Audience } from "@/server/newsletter";
+import { AUDIENCE_LABEL, countOptouts, dispatchDueNewsletters, listNewsletters, type Audience } from "@/server/newsletter";
 
 export const metadata = { title: "Nieuwsbrieven" };
 const fmt = (d: Date | null) => (d ? new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Amsterdam" }).format(d) : "–");
 export default async function Page({ searchParams }: { searchParams: Promise<{ msg?: string; err?: string }> }) {
   await requireStaff("beheer", "newsletter.manage");
   const sp = await searchParams;
+  await dispatchDueNewsletters().catch(() => undefined);
   const [items, optouts] = await Promise.all([listNewsletters(), countOptouts()]);
   return (
     <>
@@ -30,7 +31,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
                   <td><Badge tone={NEWSLETTER_STATUS[n.status]?.tone ?? "plain"}>{NEWSLETTER_STATUS[n.status]?.label ?? n.status}</Badge></td>
                   <td>{AUDIENCE_LABEL[n.audience as Audience] ?? n.audience}</td>
                   <td>{n.recipientCount ?? "–"}</td>
-                  <td>{fmt(n.sentAt)}</td>
+                  <td>{n.status === "scheduled" ? `Gepland: ${fmt(n.scheduledAt)}` : fmt(n.sentAt)}</td>
                 </tr>
               ))}
             </tbody>

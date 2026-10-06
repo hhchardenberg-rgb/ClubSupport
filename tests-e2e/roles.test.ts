@@ -384,3 +384,59 @@ describe("nieuwsbrieven en oud-leden (e2e)", () => {
     expect(csv).toContain('"Oud-lid"');
   });
 });
+
+describe("beveiliging, meldingen en verzoeken (e2e)", () => {
+  it("beveiligingsmeldingen: alleen systeembeheer; eigen beveiligingspagina voor elke ingelogde rol; zonder sessie naar inloggen", async () => {
+    expect((await get("/beheer/meldingen")).location).toContain("/beheer/inloggen");
+    for (const who of ["member", "scanner", "manager"]) expect((await get("/beheer/meldingen", who)).location, who).toContain("/beheer/geen-toegang");
+    expect((await get("/beheer/meldingen", "sysadmin")).status).toBe(200);
+    expect((await get("/beheer/beveiliging", "manager")).status).toBe(200);
+    expect((await get("/beheer/beveiliging", "scanner")).location).toContain("/beheer/geen-toegang");
+    expect((await get("/scanner/beveiliging", "scanner")).status).toBe(200);
+    expect((await get("/scanner/beveiliging", "member")).location).toContain("/scanner/geen-toegang");
+    expect((await get("/ledenpas/beveiliging", "member")).status).toBe(200);
+    expect((await get("/ledenpas/beveiliging")).location).toContain("/ledenpas/inloggen");
+  });
+
+  it("wijzigingsverzoeken: lid ziet alleen eigen leden en verzoeken; beheer ziet de wachtrij; scanner en lid niet", async () => {
+    const { db, schema } = await import("@/db");
+    const { makeMember } = await import("../tests/helpers");
+    const { createChangeRequest } = await import("@/server/requests");
+    const mine = await makeMember(101, "Verzoek Lid");
+    const other = await makeMember(102, "Ander Verzoek");
+    for (const m of [mine]) await db.insert(schema.accountMemberAccess).values({ userId: "member", memberId: m.member.id, grantedBy: "manager" });
+    await createChangeRequest("member", mine.member.id, "details", { fullName: "Verzoek Lid Gewijzigd", note: "typefout" });
+    await expect(createChangeRequest("member", other.member.id, "details", { fullName: "Gehackt" })).rejects.toMatchObject({ code: "not_found" });
+    const page = await get("/ledenpas/verzoeken", "member");
+    expect(page.status).toBe(200);
+    expect(page.text).toContain("Verzoek Lid 101");
+    expect(page.text).not.toContain("Ander Verzoek 102");
+    expect(page.text).toContain("In behandeling");
+    const admin = await get("/beheer/verzoeken", "manager");
+    expect(admin.status).toBe(200);
+    expect(admin.text).toContain("Verzoek Lid Gewijzigd");
+    expect(admin.text).toContain("Goedkeuren en doorvoeren");
+    expect((await get("/beheer/verzoeken", "scanner")).location).toContain("/beheer/geen-toegang");
+    expect((await get("/beheer/verzoeken", "member")).location).toContain("/beheer/geen-toegang");
+    expect((await get("/ledenpas/verzoeken")).location).toContain("/ledenpas/inloggen");
+    expect((await get("/beheer", "manager")).text).toContain("Verzoeken (");
+  });
+
+  it("nieuwsbrief plannen: concept toont de planningssectie; een geplande nieuwsbrief is niet meer te bewerken", async () => {
+    const nl = await import("@/server/newsletter");
+    const { formatAmsterdamLocal } = await import("@/lib/time");
+    const id = await nl.createNewsletter("manager", { subject: "Planbrief", body: "tekst", audience: "everyone" });
+    const { makeMember } = await import("../tests/helpers");
+    const { db, schema } = await import("@/db");
+    const m = await makeMember(103, "Mail Lid");
+    await db.update(schema.member).set({ email: "planlid@example.test" }).where(eq(schema.member.id, m.member.id));
+    let page = await get(`/beheer/nieuwsbrieven/${id}`, "manager");
+    expect(page.text).toContain("Nieuwsbrief plannen");
+    expect(page.text).toContain('type="datetime-local"');
+    await nl.scheduleNewsletter("manager", id, formatAmsterdamLocal(new Date(Date.now() + 3 * 3600_000)), true);
+    page = await get(`/beheer/nieuwsbrieven/${id}`, "manager");
+    expect(page.text).toContain("Planning annuleren");
+    expect(page.text).not.toContain("Concept opslaan");
+    expect((await get("/beheer/nieuwsbrieven", "manager")).text).toContain("Gepland:");
+  });
+});

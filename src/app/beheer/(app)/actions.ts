@@ -5,12 +5,15 @@ import { redirect } from "next/navigation";
 import { randomUUID } from "node:crypto";
 import { db, schema } from "@/db";
 import { audit } from "@/lib/audit";
+import { isUniqueViolation } from "@/lib/db-errors";
 import { CSV_MAX_BYTES } from "@/lib/csv";
 import { rateLimit } from "@/lib/ratelimit";
 import { ROLES, type Role } from "@/lib/permissions";
 import { requireStaff } from "@/lib/session";
 import { createMemberWithPass, isValidEmail, linkMemberToAccount, normalizeEmail, previewAccountForEmail, unlinkMemberFromAccount } from "@/server/accounts";
 import { processOutbox, resendInvitation } from "@/server/email/outbox";
+import { decideChangeRequest } from "@/server/requests";
+import { acknowledgeSecurityEvent, raiseSecurityEvent, resetStaffMfa } from "@/server/security";
 import { commitImport, previewMapped, resetToMapping, startImport, type MatchKey } from "@/server/import";
 import { archiveMember, changeMembership, cleanDates, unarchiveMember, type MembershipAction } from "@/server/memberships";
 import { FIELD_KEYS, type FieldKey } from "@/lib/csv";
@@ -61,8 +64,8 @@ export async function createMemberAction(_: FormState, f: FormData): Promise<For
     memberId = r.memberId;
   } catch (e) {
     if (e instanceof DomainError) return { error: e.message };
-    if (/member_external_ref_unique/i.test(String(e))) return { error: "Deze externe referentie bestaat al bij een ander lid." };
-    if (/duplicate key|member_member_number/i.test(String(e))) return { error: "Dit lidnummer bestaat al." };
+    if (isUniqueViolation(e, "member_external_ref_unique")) return { error: "Deze externe referentie bestaat al bij een ander lid." };
+    if (isUniqueViolation(e)) return { error: "Dit lidnummer bestaat al." };
     console.error("lid aanmaken mislukt", e instanceof Error ? e.message : "onbekend");
     return { error: "Aanmaken mislukt. Probeer het opnieuw." };
   }
@@ -93,7 +96,7 @@ export async function updateMemberAction(f: FormData) {
       await audit({ actor: s.user.id, action: "member.update", targetType: "member", targetId: id, metadata: { emailChanged: (m.email ?? "") !== (email ? normalizeEmail(email) : ""), nameChanged: m.fullName !== fullName, externalRefChanged: (m.externalRef ?? "") !== externalRef } }, tx);
     });
     } catch (e) {
-      if (/member_external_ref_unique/i.test(String(e))) throw new DomainError("dup", "Deze externe referentie bestaat al bij een ander lid.");
+      if (isUniqueViolation(e, "member_external_ref_unique")) throw new DomainError("dup", "Deze externe referentie bestaat al bij een ander lid.");
       throw e;
     }
     return "Gegevens opgeslagen. Het e-mailadres van een lid wijzigt het account niet; koppelen gebeurt apart.";
@@ -323,6 +326,7 @@ export async function changeRoleAction(f: FormData) {
       await tx.delete(schema.session).where(eq(schema.session.userId, id)); // nieuwe rechten gelden direct
       await audit({ actor: s.user.id, action: "staff.role_change", targetType: "user", targetId: id, metadata: { from: u.role, to: role } }, tx);
     });
+    await raiseSecurityEvent({ type: "role_changed", userId: id, dedupe: `rc:${id}:${Date.now()}`, details: { from: u.role, to: role, by: s.user.id }, notifyAdmins: true, notifyUser: { title: "Je rol is gewijzigd", lines: ["Een systeembeheerder heeft de rol van je HHC ClubSupport-account gewijzigd.", "Je bestaande sessies zijn beëindigd; log opnieuw in."] } }).catch(() => undefined);
     return "Rol gewijzigd; bestaande sessies zijn beëindigd.";
   });
 }
@@ -382,3 +386,38 @@ export async function resendStaffInviteAction(f: FormData) {
   });
 }
 
+
+
+/** Systeembeheer: tweede factoren van een staf-account resetten (telefoon kwijt en geen herstelcodes). */
+export async function resetStaffMfaAction(f: FormData) {
+  const s = await requireStaff("beheer", "staff.manage");
+  await flow("/beheer/accounts", async () => {
+    if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig het resetten met het vinkje.");
+    try {
+      await resetStaffMfa(s.user.id, str(f, "userId"), str(f, "reason"));
+    } catch (e) {
+      const m = e instanceof Error ? e.message : "";
+      if (m === "reason_required") throw new DomainError("v", "Een reden is verplicht (minimaal 3 tekens).");
+      if (m === "self") throw new DomainError("self", "Je kunt je eigen MFA niet resetten; gebruik een herstelcode of vraag een andere systeembeheerder.");
+      if (m === "not_found") throw new DomainError("nf", "Staf-account niet gevonden.");
+      throw e;
+    }
+    return "Tweestapsverificatie gereset. Het account moet MFA bij de volgende login opnieuw instellen; het account en de systeembeheerders zijn gewaarschuwd.";
+  });
+}
+
+export async function acknowledgeSecurityAction(f: FormData) {
+  const s = await requireStaff("beheer", "security.read");
+  await acknowledgeSecurityEvent(s.user.id, str(f, "id"));
+  revalidatePath("/beheer", "layout");
+  redirect("/beheer/meldingen");
+}
+
+export async function decideRequestAction(f: FormData) {
+  const s = await requireStaff("beheer", "members.write");
+  await flow("/beheer/verzoeken", async () => {
+    const approve = str(f, "decision") === "approve";
+    await decideChangeRequest(s.user.id, str(f, "id"), approve, str(f, "note"));
+    return approve ? "Verzoek goedgekeurd en doorgevoerd; het lid is gemaild." : "Verzoek afgewezen; het lid is gemaild.";
+  });
+}

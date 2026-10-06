@@ -2,7 +2,7 @@ import { and, eq, lte, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { generateLinkToken, hashLinkToken } from "@/lib/tokens";
 import { env } from "@/lib/env";
-import { invitationMail, passNoticeMail, resetMail, type Mail } from "./templates";
+import { invitationMail, noticeMail, passNoticeMail, resetMail, type Mail, type NoticePayload } from "./templates";
 import { sendMail } from "./provider";
 
 const { emailOutbox, user, accountToken } = schema;
@@ -32,6 +32,10 @@ async function buildMail(row: typeof emailOutbox.$inferSelect, u: typeof user.$i
   if (row.kind === "password_reset") {
     const t = await createLinkToken(u.id, "reset", RESET_TTL_MS);
     return resetMail({ link: `${env.appUrl}/wachtwoord-resetten?token=${t}` });
+  }
+  if (row.kind === "notice") {
+    const p = row.payload as Partial<NoticePayload> | null;
+    return noticeMail({ title: String(p?.title ?? "Melding van HHC ClubSupport").slice(0, 150), lines: Array.isArray(p?.lines) ? p.lines.map((l) => String(l).slice(0, 500)).slice(0, 8) : [], cta: p?.cta });
   }
   return passNoticeMail({ name: u.name });
 }

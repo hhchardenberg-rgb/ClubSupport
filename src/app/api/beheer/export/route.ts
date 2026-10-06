@@ -4,6 +4,7 @@ import { clientIp, sameOrigin } from "@/lib/http";
 import { CATEGORY_LABEL, MEMBERSHIP_LABEL, memberCategory } from "@/lib/membership";
 import { rateLimit } from "@/lib/ratelimit";
 import { apiStaff } from "@/lib/session";
+import { onExport } from "@/server/security";
 import { listMembersForExport, MEMBER_STATUS_FILTERS, MEMBERSHIP_FILTERS } from "@/server/admin";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,7 @@ export async function POST(req: Request) {
   const q = get("q") || undefined;
   const rows = await listMembersForExport({ q, status, membership });
   await audit({ actor: session.user.id, action: "members.export", metadata: { rows: rows.length, status: status ?? null, membership: membership ?? null, hasQuery: !!q } });
+  await onExport(session.user.id);
   const csv = toCsv([
     ["lidnummer", "naam", "email", "externe_referentie", "categorie", "lidmaatschap", "begindatum", "einddatum", "pas", "gearchiveerd", "notitie"],
     ...rows.map((r) => [

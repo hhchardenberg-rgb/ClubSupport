@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ScannerApp } from "@/components/ScannerApp";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SignOutButton } from "@/components/SignOutButton";
@@ -13,6 +14,7 @@ export default async function Page() {
       <main id="main">
         <p className="muted">Ingelogd als {s.user.name}. Elke scan wordt live bij de server gecontroleerd.</p>
         <ScannerApp />
+        <p className="muted"><Link href="/scanner/beveiliging">Beveiliging: passkey en herstelcodes</Link></p>
       </main>
     </>
   );

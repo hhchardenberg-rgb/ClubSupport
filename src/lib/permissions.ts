@@ -20,6 +20,7 @@ export const PERMISSIONS = [
   "newsletter.manage", // nieuwsbrieven opstellen, testen en versturen
   "staff.manage", // staf-accounts en rollen
   "audit.read",
+  "security.read", // beveiligingsmeldingen (verdachte activiteit) inzien en afhandelen
   "scanlog.read", // controlelogboek (wie scande/zocht wat en wanneer)
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -30,7 +31,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   member: ["member.self"],
   scanner: ["scan", "members.lookup"],
   manager: MANAGER,
-  sysadmin: [...MANAGER, "staff.manage", "audit.read"],
+  sysadmin: [...MANAGER, "staff.manage", "audit.read", "security.read"],
 };
 
 export function can(role: string | null | undefined, permission: Permission): boolean {
