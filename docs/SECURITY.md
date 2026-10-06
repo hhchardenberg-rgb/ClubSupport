@@ -65,7 +65,7 @@ Legenda: **T** = door een geautomatiseerde test gedekt · **I** = geïmplementee
 ## 4. Wat nog externe configuratie vereist
 - Neon-database in een **EU-regio** bevestigen, back-up/point-in-time-herstel van het gekozen plan controleren en een herstel **testen** (niet gedaan).
 - Resend: afzenderdomein (SPF/DKIM) en `EMAIL_MODE=live`; nu alleen testmodus.
-- `CRON_SECRET` instellen (zonder secret zijn de cron-endpoints dicht, dus mail-retry en opruimen draaien dan niet).
+- `CRON_SECRET` is ingesteld in Vercel (Production, gevoelig); zonder secret zijn de cron-endpoints dicht en draaien mail-retry en opruimen niet. Roteer het bij vermoeden van lekken.
 - Productiedomein en eventuele Vercel Deployment Protection-instellingen (controleer dat de productie-URL publiek bereikbaar is voor leden).
 - GitHub: secret scanning/push protection en Dependabot activeren.
 - Bewaartermijnen, incidentcontact en verwerkingsregister door de club vast te stellen (AVG).
