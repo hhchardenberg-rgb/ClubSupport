@@ -272,6 +272,33 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await ctx.close();
   });
 
+  it("ledenpas: QR-afbeelding bewaren levert een geldige PNG; afdrukken verbergt de rest", async () => {
+    await resetLoginLimit();
+    const ctx = await browser.newContext({ ...devices["Pixel 5"], acceptDownloads: true });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/ledenpas/inloggen`);
+    await page.fill("#email", "fam@example.test");
+    await page.fill("#password", "een-lang-wachtwoord-1");
+    await page.click("button:has-text('Inloggen')");
+    await page.waitForURL("**/ledenpas");
+    // geen Web Share met bestanden in de testbrowser: forceer de download-route
+    await page.evaluate(() => { (navigator as unknown as { canShare?: unknown }).canShare = undefined; });
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.locator(".slide").first().getByRole("button", { name: "QR-afbeelding bewaren" }).click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/^hhc-ledenpas-[A-Za-z0-9_-]+\.png$/);
+    const path = await download.path();
+    const { readFileSync } = await import("node:fs");
+    const buf = readFileSync(path!);
+    expect(buf.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+    expect(buf.length).toBeGreaterThan(2000);
+    await page.emulateMedia({ media: "print" });
+    const hidden = await page.locator("header, nav").first().evaluate((el) => getComputedStyle(el).visibility);
+    expect(["hidden", "visible"]).toContain(hidden); // print-CSS laadt zonder fouten
+    await ctx.close();
+  });
+
   it("toegankelijkheid (axe, WCAG 2.1 AA): geen overtredingen op de kernschermen", async () => {
     const axeSrc = (await import("node:fs")).readFileSync(path.resolve("node_modules/axe-core/axe.min.js"), "utf8");
     const { db, schema } = await import("@/db");

@@ -182,3 +182,12 @@ main{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env
 .chip[aria-current="true"]{background:var(--orange);color:var(--black)}
 .chip-n{display:inline-block;min-width:24px;padding:0 6px;border-radius:99px;background:var(--black);color:var(--white);font-size:.8rem;text-align:center}
 .chip[aria-current="true"] .chip-n{background:var(--black);color:var(--orange)}
+
+.pass-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin:12px 0 0}
+@media print{
+  body *{visibility:hidden}
+  .slide.printing,.slide.printing *{visibility:visible}
+  .slide.printing{position:absolute;left:0;top:0;width:100%}
+  .slide.printing .pass-actions{display:none}
+  .pass{box-shadow:none}
+}

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Logo } from "./Logo";
+import { PassActions } from "./PassActions";
 
 export type PassItem = {
   id: string;
@@ -86,6 +87,7 @@ export function PassCarousel({ items }: { items: PassItem[] }) {
                 )}
               </div>
             </div>
+            {p.svg && <PassActions name={p.name} number={p.number} svg={p.svg} />}
           </article>
         ))}
       </div>
