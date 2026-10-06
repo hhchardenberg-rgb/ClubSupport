@@ -11,7 +11,7 @@ const shot = (n) => U(`pitch-out/shots/${n}.png`);
 const font = (f) => U(`public/fonts/${f}.woff2`);
 
 const phone = (n, cap) => `<figure class="ph"><div class="dev"><img src="${shot(n)}" alt=""></div>${cap ? `<figcaption>${cap}</figcaption>` : ""}</figure>`;
-const desk = (n, cap, h = 430, w = 760, pos = "top") => `<figure class="dk" style="width:${w}px"><div class="bar"><i></i><i></i><i></i><span>clubsupport-hhchardenberg-rgbs-projects.vercel.app/beheer</span></div><div class="scr" style="height:${h}px"><img src="${shot(n)}" style="object-position:${pos}" alt=""></div>${cap ? `<figcaption>${cap}</figcaption>` : ""}</figure>`;
+const desk = (n, cap, h = 440, w = 700, pos = "top") => `<figure class="dk" style="width:${w}px"><div class="scr" style="height:${h}px"><img src="${shot(n)}" style="object-position:${pos}" alt=""></div>${cap ? `<figcaption>${cap}</figcaption>` : ""}</figure>`;
 const logo = `<img class="logo" src="${U("public/brand/logo.png")}" alt="HHC ClubSupport">`;
 
 let n = 0;
@@ -45,15 +45,17 @@ const slides = [
 
   two("Voor controleurs", "Pas vergeten? Zoek het lid op", `<p>Een lid zonder pas hoeft niet te worden weggestuurd. De controleur zoekt op naam of lidnummer en ziet direct of er een actieve pas is.</p>${ul("Minimaal 3 tekens, maximaal 8 resultaten", "Alleen naam, lidnummer en status: geen adres of e-mail", "Begrensd per minuut; zoektermen worden niet opgeslagen", "Elke zoekactie staat wel (zonder zoekterm) in het controlelogboek")}`, `<div class="row">${phone("scanner-zoeken", "Zoeken op naam of lidnummer")}${phone("scanner-onbekend", "Onbekende code")}</div>`),
 
-  two("Voor het bestuur", "Beheer: overzicht en leden", `<p>Alles wat de ledenadministratie nodig heeft, op telefoon én desktop.</p>${ul("Dashboard met aantallen en status", "Leden zoeken en filteren", "Nieuw lid aanmaken: pas en uitnodiging gaan automatisch mee", "Rechten per rol: scanner, ledenbeheer, systeembeheer")}`, `${desk("beheer-overzicht", "Overzicht", 270, 570)}<div style="height:14px"></div>${desk("beheer-leden", "Ledenlijst", 270, 570)}`),
+  two("Voor het bestuur", "Beheer: leden in beeld", `<p>Alles wat de ledenadministratie nodig heeft, op telefoon én desktop.</p>${ul("Dashboard met aantallen en status", "Leden zoeken en filteren", "Nieuw lid aanmaken: pas en uitnodiging gaan automatisch mee", "Rechten per rol: scanner, ledenbeheer, systeembeheer")}`, `${desk("beheer-leden", "Ledenlijst", 470, 700)}`),
 
-  two("Passen beheren", "Een pas kwijt? In seconden opgelost", `<p>Op de pagina van een lid staat alles bij elkaar: gegevens, gekoppelde accounts en de pas met haar geschiedenis.</p>${ul("<b>Deactiveren</b> en later weer activeren (bijv. tijdelijk niet betaald, door een mens besloten)", "<b>Opnieuw uitgeven</b> bij verlies of lek: een nieuwe unieke pas; de oude code is direct en onomkeerbaar waardeloos", "Elke wijziging met reden in het auditlog")}`, `${desk("beheer-lid", "Lidpagina", 440, 580)}`),
+  two("Passen beheren", "Een pas kwijt? In seconden opgelost", `<p>Op de pagina van een lid staat alles bij elkaar: gegevens, gekoppelde accounts en de pas met haar geschiedenis.</p>${ul("<b>Deactiveren</b> en later weer activeren (bijv. tijdelijk niet betaald, door een mens besloten)", "<b>Opnieuw uitgeven</b> bij verlies of lek: een nieuwe unieke pas; de oude code is direct en onomkeerbaar waardeloos", "Elke wijziging met reden in het auditlog")}`, `${desk("beheer-lid", "Lidpagina", 470, 700)}`),
 
-  two("Importeren", "Honderden leden in één keer, zonder verrassingen", `<p>CSV uploaden, <b>eerst een preview</b>, dan pas bevestigen. Er wordt niets opgeslagen of gemaild voordat u akkoord geeft.</p>${ul("Fouten en dubbele lidnummers worden zichtbaar overgeslagen", "Gedeeld e-mailadres? Eén account met meerdere leden, <b>één uitnodiging</b>", "Koppeling aan bestaande accounts vraagt expliciete bevestiging")}`, `${desk("beheer-import-preview", "Importpreview", 440, 580)}`),
+  two("Importeren", "Honderden leden in één keer, zonder verrassingen", `<p>CSV uploaden, <b>eerst een preview</b>, dan pas bevestigen. Er wordt niets opgeslagen of gemaild voordat u akkoord geeft.</p>${ul("Fouten en dubbele lidnummers worden zichtbaar overgeslagen", "Gedeeld e-mailadres? Eén account met meerdere leden, <b>één uitnodiging</b>", "Koppeling aan bestaande accounts vraagt expliciete bevestiging")}`, `${desk("beheer-import-preview", "Importpreview", 470, 700)}`),
 
-  two("Toezicht", "Controlelogboek: wie controleerde wat", `<p>Een apart, doorzoekbaar logboek voor het bestuur. Kies met één tik een controleur, of filter op lid, uitkomst en periode.</p>${ul("Tijd, controleur, uitkomst en lid", "Nooit de QR-code of een zoekterm", "Bewaartermijn 90 dagen, instelbaar")}`, `${desk("beheer-controles-controleur", "Controles per controleur", 440, 580)}`),
+  two("Toezicht", "Controlelogboek: wie controleerde wat", `<p>Een apart, doorzoekbaar logboek voor het bestuur. Kies met één tik een controleur, of filter op lid, uitkomst en periode.</p>${ul("Tijd, controleur, uitkomst en lid", "Nooit de QR-code of een zoekterm", "Bewaartermijn 90 dagen, instelbaar")}`, `${desk("beheer-controles-controleur", "Controles per controleur", 470, 700)}`),
 
-  two("Toezicht", "Audit en accounts", `<p>Alle gevoelige handelingen worden vastgelegd, zonder persoonsgegevens of tokens in het log. Accounts beheren in één scherm.</p>${ul("Audit filteren op account en op actie", "Accounts uitnodigen, blokkeren en van rol wisselen", "Beheerrollen vereisen tweestapsverificatie (MFA)")}`, `${desk("beheer-audit", "Auditlog", 270, 570)}<div style="height:14px"></div>${desk("beheer-accounts", "Accounts", 270, 570)}`),
+  two("Toezicht", "Audit: elke gevoelige handeling vastgelegd", `<p>Geen persoonsgegevens of tokens in het log, wel wie wat deed en waarom.</p>${ul("Filter per account met één tik, en op actie", "Bewaartermijn instelbaar (standaard 2 jaar)", "Alleen systeembeheer heeft toegang")}`, `${desk("beheer-audit", "Auditlog", 470, 700)}`),
+
+  two("Accounts en rollen", "Elke medewerker een eigen account", `<p>Controleurs en beheerders melden zich persoonlijk aan; geen gedeelde inlog.</p>${ul("Uitnodigen, blokkeren en van rol wisselen", "Rollen: scanner, ledenbeheer, systeembeheer", "Beheerrollen vereisen tweestapsverificatie (MFA)", "Per account direct naar controles en auditlog")}`, `${desk("beheer-accounts", "Accounts", 470, 700)}`),
 
   slide("plain", `<p class="k">Veiligheid vanaf het ontwerp</p><h2>Gebouwd om niet te lekken</h2><div class="cols3 sec">
     <div class="card"><h3>De code</h3>${ul("Minimaal 256 bit willekeurig, onraadbaar", "In de QR staat <b>geen</b> naam of nummer", "Opgeslagen als HMAC-hash, plus versleuteld (AES-GCM); bij intrekking gewist")}</div>
@@ -81,51 +83,54 @@ const css = `
 @font-face{font-family:DIN;src:url(${font("din-black")});font-weight:900}
 @page{size:1280px 720px;margin:0}
 *{box-sizing:border-box}
-body{margin:0;font-family:DIN,Arial,sans-serif;color:#000}
-.s{width:1280px;height:720px;position:relative;overflow:hidden;page-break-after:always;background:#f2f2f2;padding:56px 72px}
-.s::before{content:"";position:absolute;left:0;right:0;bottom:0;height:12px;background:#ff6600}
-.pg{position:absolute;right:28px;bottom:22px;font-weight:700;font-size:14px;color:#4a4a4a;letter-spacing:.1em}
-.k{margin:0 0 10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;font-size:15px;color:#ff6600;background:#000;display:inline-block;padding:5px 12px;border-radius:99px}
-h1,h2,h3{font-family:DIN;text-transform:uppercase;margin:0;line-height:1.05}
-h2{font-weight:300;font-size:46px;margin:6px 0 22px;letter-spacing:.01em}
-h3{font-weight:900;font-size:21px;letter-spacing:.06em;margin-bottom:12px}
-p{font-size:20px;line-height:1.45;margin:0 0 14px}
-ul{margin:0 0 12px;padding-left:22px;font-size:19px;line-height:1.4}
-li{margin-bottom:8px}li::marker{color:#ff6600}
-.cover,.end{background:#000;color:#fff;padding:0}
-.cover::before,.end::before{height:18px}
-.cv{position:absolute;left:84px;top:96px;width:620px}
-.cv .logo{height:150px;margin-bottom:34px}
-.cv h1{font-weight:300;font-size:84px;letter-spacing:.02em;margin:10px 0 24px;line-height:1}
-.cv .lead{font-size:26px;color:#ddd;line-height:1.4}
-.cvph{position:absolute;right:70px;top:60px;display:flex;gap:26px}
-.end .cv{top:130px;width:1000px}.end h1{font-size:96px}.url{display:inline-block;margin-top:26px;font-size:28px;font-weight:700;color:#000;background:#ff6600;padding:12px 26px;border-radius:14px}
-.split{display:grid;grid-template-columns:520px 1fr;gap:34px;align-items:center}
-.split.wide{grid-template-columns:430px 1fr}
+body{margin:0;font-family:DIN,Arial,sans-serif;color:#111;background:#fff}
+.s{width:1280px;height:720px;position:relative;overflow:hidden;page-break-after:always;background:#fff;padding:64px 80px}
+.s::after{content:"";position:absolute;left:80px;top:34px;width:44px;height:44px;background:url(${U("public/brand/logo-small.png")}) center/contain no-repeat}
+.cover::after,.end::after,.cover .pg,.end .pg{display:none}
+.pg{position:absolute;right:80px;top:46px;font-weight:700;font-size:14px;color:#8a8a8a;letter-spacing:.14em}
+.k{margin:0 0 14px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;font-size:14px;color:#111;display:flex;align-items:center;gap:12px}
+.k::before{content:"";width:36px;height:4px;background:#ff6600;display:block}
+h1,h2,h3{margin:0;line-height:1.05;text-transform:uppercase}
+h2{font-weight:300;font-size:44px;margin:0 0 24px;letter-spacing:.01em}
+h3{font-weight:900;font-size:19px;letter-spacing:.08em;margin-bottom:14px}
+p{font-size:20px;line-height:1.5;margin:0 0 14px;color:#333}
+ul{margin:0 0 12px;padding-left:22px;font-size:19px;line-height:1.45;color:#222}
+li{margin-bottom:9px}li::marker{color:#ff6600}
+.plain{padding-top:90px;display:flex;flex-direction:column;justify-content:center}
+.plain h2{margin-bottom:30px}
+.split{display:grid;grid-template-columns:480px 1fr;gap:48px;align-items:center;padding-top:96px;padding-bottom:48px}
+.split.wide{grid-template-columns:420px 1fr}
 .split .vis{display:flex;justify-content:center;align-items:center;flex-direction:column}
-.split h2{font-size:42px}
-.row{display:flex;gap:26px;justify-content:center}
-.row.three{gap:16px}.row.three .dev{width:205px;height:474px}
+.row{display:flex;gap:28px;justify-content:center}
+.row.three{gap:18px}.row.three .dev{width:200px;height:462px}
 .ph,.dk{margin:0;text-align:center}
-figcaption{margin-top:10px;font-size:15px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#4a4a4a}
-.dev{width:236px;height:545px;border:7px solid #000;border-radius:34px;background:#000;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,.28)}
+figcaption{margin-top:12px;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#777}
+.dev{width:232px;height:536px;border:4px solid #111;border-radius:30px;background:#fff;overflow:hidden}
 .dev img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
-.pasimg{height:545px;width:auto;border-radius:20px;box-shadow:0 18px 40px rgba(0,0,0,.28);display:block;margin:0 auto}
-.dk{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,.25);border:2px solid #000}
-.dk .bar{background:#000;height:30px;display:flex;align-items:center;gap:7px;padding:0 12px}
-.dk .bar i{width:10px;height:10px;border-radius:50%;background:#ff6600;display:block}
-.dk .bar span{color:#bbb;font-size:12px;margin-left:12px}
+.pasimg{height:536px;width:auto;border-radius:18px;display:block;margin:0 auto}
+.dk{border:1px solid #cfcfcf;border-radius:14px;overflow:hidden;background:#fff}
 .dk .scr{overflow:hidden}.dk img{width:100%;height:100%;object-fit:cover;display:block}
-.dk figcaption{margin:0;padding:6px;background:#f2f2f2}
-.cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
-.cols2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-.card{background:#fff;border-radius:18px;padding:26px 28px;border-left:8px solid #ff6600;box-shadow:0 6px 18px rgba(0,0,0,.08)}
-.card.hl{background:#000;color:#fff}.card.hl h3{color:#ff6600}
-.tile{background:#000;color:#fff;border-radius:22px;padding:30px;min-height:330px}
-.tile .n{display:inline-flex;width:54px;height:54px;border-radius:50%;background:#ff6600;color:#000;font-weight:900;font-size:28px;align-items:center;justify-content:center;margin-bottom:18px}
-.tile h3{color:#ff6600;font-size:30px}.tile p{font-size:21px;color:#eee}
-.foot{margin-top:26px;font-size:18px;color:#4a4a4a}
-.note{font-size:16px;color:#4a4a4a;font-style:italic}
+.dk figcaption{margin:0;padding:10px;border-top:1px solid #e6e6e6;background:#fafafa}
+.cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.card{background:#fff;border:1px solid #d9d9d9;border-top:5px solid #ff6600;border-radius:14px;padding:26px 28px}
+.card.hl{background:#111;border-color:#111;border-top-color:#ff6600;color:#fff}.card.hl h3{color:#ff6600}.card.hl ul,.card.hl p{color:#eee}
+.tile{background:#111;color:#fff;border-radius:18px;padding:32px;min-height:330px}
+.tile .n{display:inline-flex;width:52px;height:52px;border-radius:50%;background:#ff6600;color:#111;font-weight:900;font-size:26px;align-items:center;justify-content:center;margin-bottom:20px}
+.tile h3{color:#ff6600;font-size:28px}.tile p{font-size:20px;color:#eee}
+.foot{margin-top:28px;font-size:17px;color:#555;border-left:4px solid #ff6600;padding-left:16px}
+.note{font-size:16px;color:#666;font-style:italic}
+.cover,.end{background:#111;color:#fff;padding:0}
+.cover::before,.end::before{content:"";position:absolute;left:0;top:0;bottom:0;width:14px;background:#ff6600}
+.cv{position:absolute;left:96px;top:92px;width:600px}
+.cv .logo{height:140px;margin-bottom:36px}
+.cv .k{color:#ff6600}
+.cv h1{font-weight:300;font-size:80px;letter-spacing:.02em;margin:8px 0 24px;line-height:1}
+.cv .lead{font-size:25px;color:#ddd;line-height:1.45}
+.cvph{position:absolute;right:70px;top:70px;display:flex;gap:26px}
+.cvph .dev{border-color:#444}
+.end .cv{top:150px;width:1000px}.end h1{font-size:92px}
+.url{display:inline-block;margin-top:24px;font-size:26px;font-weight:700;color:#111;background:#ff6600;padding:12px 26px;border-radius:12px}
 `;
 
 const html = `<!doctype html><html lang="nl"><meta charset="utf-8"><title>HHC ClubSupport — pitch</title><style>${css}</style><body>${slides.join("")}</body></html>`;
@@ -136,7 +141,7 @@ await page.goto(pathToFileURL(path.join(out, "pitch.html")).href);
 await page.evaluate(() => document.fonts.ready);
 await page.waitForTimeout(800);
 await page.pdf({ path: path.join(out, "HHC-ClubSupport-pitch.pdf"), width: "1280px", height: "720px", printBackground: true, preferCSSPageSize: true });
-for (const i of [6, 10, 12, 13, 14, 18]) {
+for (const i of [1, 4, 6, 10, 11, 13, 19]) {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.locator(".s").nth(i - 1).screenshot({ path: path.join(out, `prev-${i}.png`) });
 }
