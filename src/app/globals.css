@@ -57,6 +57,10 @@ label{display:block;font-weight:700;font-size:.95rem;margin:16px 0 6px}
 input,select,textarea{width:100%;min-height:50px;padding:11px 14px;font:inherit;color:var(--black);background:var(--white);border:2px solid var(--black);border-radius:10px;transition:box-shadow .12s}
 input[type=checkbox]{width:24px;min-height:24px;accent-color:var(--black)}
 input[type=file]{padding:10px}
+/* iOS Safari geeft datumvelden een eigen minimumbreedte; fieldsets hebben min-content als minimumbreedte: beide uitzetten */
+input[type=date],input[type=time],input[type=datetime-local]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;text-align:left}
+input[type=date]::-webkit-date-and-time-value{text-align:left;min-height:1.4em}
+fieldset{min-width:0;max-width:100%}
 input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 4px var(--orange)}
 :focus-visible{outline:3px solid var(--black);outline-offset:2px;box-shadow:0 0 0 6px var(--orange)}
 button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:50px;padding:10px 22px;font:inherit;font-family:var(--font-display);font-size:1.05rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--black);background:var(--orange);border:2px solid var(--black);border-radius:10px;cursor:pointer;text-decoration:none;transition:background .12s,color .12s,transform .06s}
