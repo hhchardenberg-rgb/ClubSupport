@@ -2,19 +2,42 @@
  * CSV-verwerking voor ledenimport. ALLE waarden zijn onbetrouwbare invoer:
  * ze worden alleen als tekst verwerkt/gerenderd (React escaped), nooit als HTML of formule.
  */
+import { parseDateInput } from "./membership";
+
 export const CSV_MAX_BYTES = 1024 * 1024; // 1 MB
 export const CSV_MAX_ROWS = 5000;
-export const FIELD_LIMITS = { memberNumber: 32, fullName: 120, email: 254, membershipNote: 300 } as const;
+export const FIELD_LIMITS = { memberNumber: 32, fullName: 120, email: 254, membershipNote: 300, externalRef: 64, membershipStatus: 24, startDate: 16, endDate: 16 } as const;
+export type FieldKey = keyof typeof FIELD_LIMITS;
+export const FIELD_KEYS = Object.keys(FIELD_LIMITS) as FieldKey[];
+export const FIELD_LABEL: Record<FieldKey, string> = {
+  memberNumber: "Lidnummer",
+  fullName: "Naam",
+  email: "E-mailadres",
+  membershipNote: "Notitie",
+  externalRef: "Externe referentie",
+  membershipStatus: "Lidmaatschapsstatus",
+  startDate: "Begindatum lidmaatschap",
+  endDate: "Einddatum lidmaatschap",
+};
 
-/** Toegestane kolommen en hun aliassen (hoofdletter-ongevoelig). */
-const COLUMN_ALIASES: Record<string, keyof typeof FIELD_LIMITS> = {
+/** Herkende kolomkoppen (hoofdletter-ongevoelig) → veld. In het koppelscherm kan de beheerder dit aanpassen. */
+const COLUMN_ALIASES: Record<string, FieldKey> = {
   lidnummer: "memberNumber",
   naam: "fullName",
   email: "email",
   "e-mail": "email",
   notitie: "membershipNote",
+  externe_referentie: "externalRef",
+  "externe referentie": "externalRef",
+  referentie: "externalRef",
+  lidmaatschap: "membershipStatus",
+  lidmaatschapsstatus: "membershipStatus",
+  status: "membershipStatus",
+  begindatum: "startDate",
+  startdatum: "startDate",
+  einddatum: "endDate",
 };
-export const ALLOWED_COLUMNS = ["lidnummer", "naam", "email", "notitie"] as const;
+export const ALLOWED_COLUMNS = ["lidnummer", "naam", "email", "notitie", "externe_referentie", "lidmaatschap", "begindatum", "einddatum"] as const;
 
 export class CsvError extends Error {}
 
@@ -61,32 +84,57 @@ export type ParsedRow = {
   fullName: string;
   email: string;
   membershipNote: string;
+  externalRef: string;
+  /** Genormaliseerd: "" (niet opgegeven) of active | suspended | ended */
+  membershipStatus: "" | "active" | "suspended" | "ended";
+  /** ISO-datums (JJJJ-MM-DD) of "" */
+  startDate: string;
+  endDate: string;
   errors: string[];
 };
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 
-export function parseMemberCsv(text: string, isValidEmail: (e: string) => boolean, normalizeEmail: (e: string) => string) {
-  const table = parseCsv(text);
-  if (table.length === 0) throw new CsvError("Het bestand is leeg");
-  const header = table[0].map((h) => h.trim().toLowerCase());
-  const unknown = header.filter((h) => h && !(h in COLUMN_ALIASES));
-  if (unknown.length) throw new CsvError(`Onbekende kolom(men): ${unknown.map((u) => u.slice(0, 30)).join(", ")}. Toegestaan: ${ALLOWED_COLUMNS.join(", ")}`);
-  if (new Set(header.filter(Boolean)).size !== header.filter(Boolean).length) throw new CsvError("Dubbele kolomnamen in de kop");
-  const idx = (f: keyof typeof FIELD_LIMITS) => header.findIndex((h) => COLUMN_ALIASES[h] === f);
-  for (const need of ["memberNumber", "fullName"] as const) if (idx(need) < 0) throw new CsvError(`Verplichte kolom ontbreekt: ${need === "memberNumber" ? "lidnummer" : "naam"}`);
-  if (table.length - 1 > CSV_MAX_ROWS) throw new CsvError(`Maximaal ${CSV_MAX_ROWS} rijen per import`);
+const STATUS_ALIASES: Record<string, ParsedRow["membershipStatus"]> = {
+  actief: "active", active: "active",
+  geschorst: "suspended", suspended: "suspended",
+  beeindigd: "ended", "beëindigd": "ended", ended: "ended",
+};
 
+/** Eerste voorstel voor de kolomkoppeling op basis van de kopregel; onbekende kolommen komen in `unknown`. */
+export function suggestMapping(header: string[]) {
+  const used = new Set<FieldKey>();
+  const unknown: string[] = [];
+  const columns = header.map((h) => {
+    const f = COLUMN_ALIASES[h.trim().toLowerCase()];
+    if (!f) {
+      if (h.trim()) unknown.push(h.trim().slice(0, 30));
+      return "" as const;
+    }
+    if (used.has(f)) return "" as const;
+    used.add(f);
+    return f;
+  });
+  return { columns, unknown };
+}
+
+/** Bouwt gevalideerde rijen uit een tabel (zonder kopregel) met een expliciete kolomkoppeling. */
+export function buildRows(table: string[][], columns: (FieldKey | "")[], isValidEmail: (e: string) => boolean, normalizeEmail: (e: string) => string): ParsedRow[] {
+  const idx = (f: FieldKey) => columns.findIndex((c) => c === f);
   const rows: ParsedRow[] = [];
   const seenNumbers = new Map<string, number>();
-  table.slice(1).forEach((cells, i) => {
-    const get = (f: keyof typeof FIELD_LIMITS) => (idx(f) >= 0 ? (cells[idx(f)] ?? "").trim() : "");
-    const r: ParsedRow = { line: i + 2, memberNumber: get("memberNumber"), fullName: get("fullName"), email: get("email"), membershipNote: get("membershipNote"), errors: [] };
-    if (cells.length > header.length) r.errors.push("Te veel kolommen in deze rij");
-    for (const f of Object.keys(FIELD_LIMITS) as (keyof typeof FIELD_LIMITS)[]) {
-      if (CONTROL.test(r[f])) r.errors.push(`Ongeldige tekens in ${f === "memberNumber" ? "lidnummer" : f === "fullName" ? "naam" : f}`);
-      if (r[f].length > FIELD_LIMITS[f]) r.errors.push(`${f === "memberNumber" ? "Lidnummer" : f === "fullName" ? "Naam" : f} is te lang (max ${FIELD_LIMITS[f]})`);
+  const seenRefs = new Map<string, number>();
+  table.forEach((cells, i) => {
+    const get = (f: FieldKey) => (idx(f) >= 0 ? (cells[idx(f)] ?? "").trim() : "");
+    const r: ParsedRow = { line: i + 2, memberNumber: get("memberNumber"), fullName: get("fullName"), email: get("email"), membershipNote: get("membershipNote"), externalRef: get("externalRef"), membershipStatus: "", startDate: "", endDate: "", errors: [] };
+    const rawStatus = get("membershipStatus");
+    const rawStart = get("startDate");
+    const rawEnd = get("endDate");
+    if (cells.length > columns.length) r.errors.push("Te veel kolommen in deze rij");
+    for (const f of ["memberNumber", "fullName", "email", "membershipNote", "externalRef"] as const) {
+      if (CONTROL.test(r[f])) r.errors.push(`Ongeldige tekens in ${FIELD_LABEL[f].toLowerCase()}`);
+      if (r[f].length > FIELD_LIMITS[f]) r.errors.push(`${FIELD_LABEL[f]} is te lang (max ${FIELD_LIMITS[f]})`);
     }
     if (!r.memberNumber) r.errors.push("Lidnummer ontbreekt");
     else if (!/^[A-Za-z0-9._\-/]+$/.test(r.memberNumber)) r.errors.push("Lidnummer mag alleen letters, cijfers en . _ - / bevatten");
@@ -95,14 +143,45 @@ export function parseMemberCsv(text: string, isValidEmail: (e: string) => boolea
       if (!isValidEmail(r.email)) r.errors.push("Ongeldig e-mailadres");
       else r.email = normalizeEmail(r.email);
     }
+    if (r.externalRef && !/^[A-Za-z0-9._\-/:]+$/.test(r.externalRef)) r.errors.push("Externe referentie mag alleen letters, cijfers en . _ - / : bevatten");
+    if (rawStatus) {
+      const st = STATUS_ALIASES[rawStatus.toLowerCase()];
+      if (!st) r.errors.push("Onbekende lidmaatschapsstatus (gebruik actief, geschorst of beëindigd)");
+      else r.membershipStatus = st;
+    }
+    for (const [raw, key, label] of [[rawStart, "startDate", "begindatum"], [rawEnd, "endDate", "einddatum"]] as const) {
+      if (!raw) continue;
+      const d = parseDateInput(raw);
+      if (!d) r.errors.push(`Ongeldige ${label} (gebruik JJJJ-MM-DD of DD-MM-JJJJ)`);
+      else r[key] = d;
+    }
+    if (r.startDate && r.endDate && r.endDate < r.startDate) r.errors.push("Einddatum ligt vóór de begindatum");
     if (r.memberNumber) {
       const prev = seenNumbers.get(r.memberNumber.toLowerCase());
       if (prev) r.errors.push(`Dubbel lidnummer in bestand (ook op regel ${prev})`);
       else seenNumbers.set(r.memberNumber.toLowerCase(), r.line);
     }
+    if (r.externalRef) {
+      const prev = seenRefs.get(r.externalRef.toLowerCase());
+      if (prev) r.errors.push(`Dubbele externe referentie in bestand (ook op regel ${prev})`);
+      else seenRefs.set(r.externalRef.toLowerCase(), r.line);
+    }
     rows.push(r);
   });
   return rows;
+}
+
+/** Strikte variant (herkende kolommen vereist): onbekende of dubbele kolommen en ontbrekende verplichte kolommen zijn een fout. */
+export function parseMemberCsv(text: string, isValidEmail: (e: string) => boolean, normalizeEmail: (e: string) => string) {
+  const table = parseCsv(text);
+  if (table.length === 0) throw new CsvError("Het bestand is leeg");
+  const header = table[0].map((h) => h.trim().toLowerCase());
+  const { columns, unknown } = suggestMapping(header);
+  if (unknown.length) throw new CsvError(`Onbekende kolom(men): ${unknown.join(", ")}. Toegestaan: ${ALLOWED_COLUMNS.join(", ")}`);
+  if (new Set(header.filter(Boolean)).size !== header.filter(Boolean).length) throw new CsvError("Dubbele kolomnamen in de kop");
+  for (const need of ["memberNumber", "fullName"] as const) if (!columns.includes(need)) throw new CsvError(`Verplichte kolom ontbreekt: ${need === "memberNumber" ? "lidnummer" : "naam"}`);
+  if (table.length - 1 > CSV_MAX_ROWS) throw new CsvError(`Maximaal ${CSV_MAX_ROWS} rijen per import`);
+  return buildRows(table.slice(1), columns, isValidEmail, normalizeEmail);
 }
 
 /**

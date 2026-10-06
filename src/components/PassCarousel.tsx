@@ -10,6 +10,10 @@ export type PassItem = {
   active: boolean;
   svg: string | null; // zelf gegenereerde QR-SVG (geen gebruikersinvoer)
   unavailable: boolean;
+  /** Reden waarom er geen QR is: pas niet actief, lidmaatschap niet geldig of nog geen pas. */
+  reason?: "pass" | "membership" | "nopass";
+  /** Weergave van de lidmaatschapsstatus, bijv. "Geldig · t/m 31-12-2026". `active` betekent: pas actief ÉN lidmaatschap geldig. */
+  membershipLabel?: string;
 };
 
 /** Veegbare carrousel (native scroll-snap) met pijlen, stippen en toetsenbordbediening. */
@@ -71,18 +75,23 @@ export function PassCarousel({ items }: { items: PassItem[] }) {
             <div className="pass">
               <div className="pass-head">
                 <span className="pass-logo"><Logo height={34} onOrange /><span className="t">Ledenpas</span></span>
-                {p.active ? <span className="badge ok">Actief</span> : <span className="badge bad">Niet actief</span>}
+                {p.active ? <span className="badge ok">Geldig</span> : <span className="badge bad">Niet geldig</span>}
               </div>
               <div className="pass-body">
                 <div className="who">{p.name}</div>
                 <div className="num">Lidnummer {p.number}</div>
+                {p.membershipLabel && <div className="num" style={{ color: "#fff", letterSpacing: ".04em", fontSize: ".95rem" }}>Lidmaatschap: {p.membershipLabel}</div>}
                 {p.svg ? (
                   <div className="pass-qr" role="img" aria-label={`QR-code van de ledenpas van ${p.name}`} dangerouslySetInnerHTML={{ __html: p.svg }} />
                 ) : (
                   <p className="pass-off" role="alert">
                     {p.unavailable
                       ? "Deze pas kan tijdelijk niet worden getoond. Neem contact op met HHC ClubSupport."
-                      : "Deze pas is niet actief en kan niet worden gebruikt. Neem contact op met HHC ClubSupport."}
+                      : p.reason === "membership"
+                        ? "Het lidmaatschap is niet (meer) geldig, dus de pas kan niet worden gebruikt. Neem contact op met HHC ClubSupport."
+                        : p.reason === "nopass"
+                          ? "Er is voor dit lid geen actieve pas. Neem contact op met HHC ClubSupport."
+                          : "Deze pas is niet actief en kan niet worden gebruikt. Neem contact op met HHC ClubSupport."}
                   </p>
                 )}
               </div>

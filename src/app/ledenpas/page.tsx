@@ -6,7 +6,8 @@ import { PassCarousel, type PassItem } from "@/components/PassCarousel";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SignOutButton } from "@/components/SignOutButton";
 import { requireMember } from "@/lib/session";
-import { listPassesForAccount } from "@/server/accounts";
+import { listMembersForAccount } from "@/server/accounts";
+import { formatDateNl, MEMBERSHIP_LABEL } from "@/lib/membership";
 import { revealToken } from "@/server/passes";
 
 export const metadata = { title: "Ledenpas" };
@@ -14,14 +15,14 @@ export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const s = await requireMember();
-  const passes = await listPassesForAccount(s.user.id);
+  const members = await listMembersForAccount(s.user.id);
   const items: PassItem[] = await Promise.all(
-    passes.map(async (p) => {
+    members.map(async (p) => {
       let svg: string | null = null;
       let unavailable = false;
-      if (p.status === "active") {
+      if (p.valid && p.passId) {
         try {
-          const token = revealToken({ id: p.passId, tokenCiphertext: p.tokenCiphertext, status: p.status });
+          const token = revealToken({ id: p.passId, tokenCiphertext: p.tokenCiphertext, status: p.passStatus ?? "active" });
           svg = token ? await QRCode.toString(token, { type: "svg", margin: 0, errorCorrectionLevel: "M" }) : null;
         } catch {
           // Token onleesbaar (bijv. sleutel gewijzigd): geen crash, geen token in logs.
@@ -29,7 +30,9 @@ export default async function Page() {
           unavailable = true;
         }
       }
-      return { id: p.passId, name: p.fullName, number: p.memberNumber, active: p.status === "active", svg, unavailable };
+      const range = p.membershipStart || p.membershipEnd ? ` · ${p.membershipStart ? `vanaf ${formatDateNl(p.membershipStart)}` : ""}${p.membershipStart && p.membershipEnd ? " " : ""}${p.membershipEnd ? `t/m ${formatDateNl(p.membershipEnd)}` : ""}` : "";
+      const reason: PassItem["reason"] = !p.passId ? "nopass" : p.membership !== "valid" ? "membership" : "pass";
+      return { id: p.passId ?? `lid-${p.memberId}`, name: p.fullName, number: p.memberNumber, active: p.valid, svg, unavailable, reason, membershipLabel: `${MEMBERSHIP_LABEL[p.membership]}${range}` };
     }),
   );
 
@@ -41,7 +44,14 @@ export default async function Page() {
       <main id="main">
         <h1>Ledenpas</h1>
         <p className="muted" style={{ marginTop: 0 }}>Ingelogd als {s.user.email}</p>
-        {items.length > 1 && <p className="notice">Dit account bevat {items.length} ledenpassen. Veeg naar links of rechts om te wisselen. Iedereen met toegang tot dit account kan alle eraan gekoppelde passen zien en beheren.</p>}
+        {items.length > 1 && <p className="notice">Dit account is gekoppeld aan {items.length} leden. Veeg naar links of rechts om te wisselen. Iedereen met toegang tot dit account kan alle eraan gekoppelde passen zien en gebruiken.</p>}
+        {items.length > 0 && (
+          <details className="card">
+            <summary>Gekoppelde leden ({items.length})</summary>
+            <ul>{items.map((i) => <li key={i.id}><strong>{i.name}</strong> (lidnummer {i.number}) · lidmaatschap: {i.membershipLabel} · {i.active ? "pas geldig" : "pas niet geldig"}</li>)}</ul>
+            <p className="muted">Is een koppeling niet juist? Neem contact op met HHC ClubSupport; alleen een beheerder wijzigt koppelingen.</p>
+          </details>
+        )}
         {items.length === 0 ? (
           <div className="card" role="status">
             <h2>Geen ledenpas gevonden</h2>

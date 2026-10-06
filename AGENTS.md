@@ -14,6 +14,10 @@ Taal van de interface en documentatie: **Nederlands**. Namen consequent: **HHC C
 - Wijzig bestaande migraties in `drizzle/` nooit; genereer een nieuwe (`npx drizzle-kit generate`).
 - Gebruik geen groen in de UI; alleen HHC-oranje `#ff6600`, zwart, wit/grijs (rood alleen voor fouten/onomkeerbare acties). Oranje nooit als tint en nooit als tekst op wit/grijs.
 - Scanner-zoeken (`lookupMembers`) blijft beperkt: min. 3 tekens, max. 8 resultaten, alleen naam/lidnummer/passtatus, zoekterm nooit loggen.
+- Geldigheid van een scan = pas `active` **én** lidmaatschap nu geldig (`src/lib/membership.ts`, `src/lib/status.ts`); houd lid-, lidmaatschaps-, account- en passtatus gescheiden en gebruik de ene niet als vervanger van de andere.
+- E-mail is **nooit** een identiteit of matchsleutel: nooit leden of accounts samenvoegen of koppelen op e-mail/naam; geen eigenmachtige normalisatie van plus-adressen.
+- Archiveren (omkeerbaar) en verwijderen (na archivering, wissen na bewaartermijn) zijn verschillende handelingen; verwijderen mag nooit accounts of andere leden raken.
+- Een scanuitkomst of ledenweergave bevat nooit de reden van een schorsing/beëindiging of beheerdersnotities.
 - Geen secrets in de repository; alleen namen in `.env.example`.
 
 - Gebruik de gedeelde UI-onderdelen (`src/components/ui.tsx`, `Logo`, `SiteHeader`, `AuthShell`) en de klassen in `globals.css`; maak geen losse stijlen per pagina. Het logo komt uit `src/lib/brand.generated.ts` (script `scripts/make-icons.mjs`); teken of kleur het logo nooit zelf.

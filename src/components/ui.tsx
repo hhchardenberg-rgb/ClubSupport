@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { MEMBERSHIP_LABEL, type EffectiveMembership } from "@/lib/membership";
 
 /* Herbruikbare UI-onderdelen. Kleuren: HHC-oranje/zwart/wit; rood alleen voor fouten en onomkeerbare acties; geen groen. */
 
@@ -72,4 +73,11 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
       {children && <div>{children}</div>}
     </div>
   );
+}
+
+const MEMBERSHIP_TONE: Record<EffectiveMembership, "ok" | "warn" | "bad"> = { valid: "ok", scheduled: "warn", suspended: "warn", expired: "bad", ended: "bad", none: "bad" };
+
+/** Lidmaatschapsstatus (los van de passtatus). Altijd met tekst, nooit alleen kleur. */
+export function MembershipBadge({ status }: { status: EffectiveMembership }) {
+  return <span className={`badge ${MEMBERSHIP_TONE[status]}`}>{MEMBERSHIP_LABEL[status]}</span>;
 }

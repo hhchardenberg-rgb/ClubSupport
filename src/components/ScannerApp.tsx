@@ -22,6 +22,8 @@ function panelFor(v: ScanView) {
       return { cls: "ok", icon: Icon.check, title: "GELDIG", lines: [v.name, `Lidnummer ${v.memberNumber}`] };
     case "inactive":
       return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", lines: ["Pas gedeactiveerd", v.name, `Lidnummer ${v.memberNumber}`] };
+    case "membership":
+      return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", lines: ["Lidmaatschap niet geldig", v.name, `Lidnummer ${v.memberNumber}`] };
     case "revoked":
       return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", lines: ["Pas ingetrokken of verwijderd"] };
     case "unknown":
@@ -227,7 +229,7 @@ export function ScannerApp() {
           {lookup?.kind === "results" && lookup.results.length > 0 && (
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
               {lookup.results.map((r) => {
-                const st = r.pass === "active" ? { bg: "#000", fg: "#fff", bd: "#ff6600", icon: Icon.check, label: "PAS ACTIEF", sub: "Geldig lid" } : r.pass === "deactivated" ? { bg: "#b00020", fg: "#fff", bd: "#000", icon: Icon.cross, label: "PAS GEDEACTIVEERD", sub: "Niet geldig" } : { bg: "#ff6600", fg: "#000", bd: "#000", icon: Icon.cross, label: "GEEN ACTIEVE PAS", sub: "Niet geldig" };
+                const st = r.pass === "active" ? { bg: "#000", fg: "#fff", bd: "#ff6600", icon: Icon.check, label: "PAS ACTIEF", sub: "Geldig lid" } : r.pass === "deactivated" ? { bg: "#b00020", fg: "#fff", bd: "#000", icon: Icon.cross, label: "PAS GEDEACTIVEERD", sub: "Niet geldig" } : r.pass === "membership" ? { bg: "#b00020", fg: "#fff", bd: "#000", icon: Icon.cross, label: "LIDMAATSCHAP NIET GELDIG", sub: "Pas niet bruikbaar" } : { bg: "#ff6600", fg: "#000", bd: "#000", icon: Icon.cross, label: "GEEN ACTIEVE PAS", sub: "Niet geldig" };
                 return (
                   <li key={r.memberNumber} style={{ background: st.bg, color: st.fg, border: `5px solid ${st.bd}`, borderRadius: 10, padding: 12, display: "flex", gap: 12, alignItems: "center" }}>
                     <span style={{ flex: "0 0 auto", transform: "scale(.6)", transformOrigin: "left center", width: 58 }}>{st.icon}</span>

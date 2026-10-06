@@ -1,6 +1,6 @@
 # Testoverzicht
 
-Laatste volledige run (lokaal, Postgres 16, Node 22, Chromium): **49 unit-/integratietests + 28 end-to-end-/browsertests, allemaal geslaagd.** De CI-workflow (`.github/workflows/ci.yml`) is geschreven maar nog niet op GitHub gedraaid.
+Laatste volledige run (lokaal, Postgres 16, Node 22, Chromium): **73 unit-/integratietests + 34 end-to-end-/browsertests, allemaal geslaagd.** De CI-workflow (`.github/workflows/ci.yml`) is geschreven maar nog niet op GitHub gedraaid.
 
 ```bash
 npm test          # unit/integratie (tests/*.test.ts)
@@ -29,7 +29,26 @@ npm run test:e2e  # next build + e2e + browser (tests-e2e/*.test.ts)
 
 Aanvullend gedekt: **zoeken op naam/lidnummer** (`lookup.test.ts`, scanner-UI), **controlelogboek en auditfilter per account** (`scanlog.test.ts`), **offline ledenpas**, **pas bewaren als afbeelding (PNG-download)**, **veegbare pas-carrousel** (echte aanraak-veeg via CDP, pijlen, stippen, toetsenbord, labels, geen horizontale scroll; getest met verminderde beweging), **automatische toegankelijkheidscontrole** (axe-core, WCAG 2.1 A/AA) op login-, activatie-, ledenpas-, scanner- en beheerschermen op telefoon (Pixel 5) en desktop, met een negatieve controle dat axe echt overtredingen vindt, bewaartermijnen/opruimjob en cron-autorisatie (`retention.test.ts`), CSRF/Origin op eigen routes, security headers, geblokkeerd account, MFA-redirect voor beheerrollen, hoofdpagina zonder Scanner/Beheer-verwijzingen (`roles.test.ts`).
 
+## Ledenadministratie (aanvulling): gevraagde tests
+
+| Vereiste | Waar |
+|---|---|
+| Meerdere leden met hetzelfde e-mailadres (geen samenvoeging, plus-adressen apart, ongevraagd koppelen geweigerd) | `members.test.ts` |
+| Één account met expliciet gekoppelde leden/passen; ontkoppelen raakt lid/lidmaatschap/pas niet | `members.test.ts` |
+| Weigering van toegang tot niet-gekoppelde leden, ook direct (id, URL, API): `getPassForAccount`, ledenpas-HTML, beheerroutes voor lid/scanner | `members.test.ts`, `roles.test.ts` |
+| Geldige/ongeldige scans bij beëindigd, geschorst, verlopen, nog niet gestart, geen lidmaatschap, gearchiveerd; einddatum inclusief; tijdzone Amsterdam | `membership.test.ts`, `members.test.ts`, `roles.test.ts` (API) |
+| Directe server-side intrekking van vervangen/verloren pas; historie bewaard | `members.test.ts` |
+| Import: gedeelde e-mail, dubbele lidnummers, mogelijke dubbele personen, herhaald importeren, externe referentie als sleutel, kolomkoppeling (UI in Chromium) | `members.test.ts`, `import.test.ts`, `membership.test.ts` (CSV), `browser.test.ts` |
+| Maximaal één uitnodiging per nieuw account bij meerdere gekoppelde leden | `members.test.ts`, `import.test.ts` |
+| Rolbeperkingen: scanner/ledenbeheer/sysadmin/lid, export, koppelingen | `membership.test.ts`, `roles.test.ts` |
+| Veilig archiveren/verwijderen zonder cascade (account en ander lid blijven; purge raakt alleen het verwijderde lid) | `members.test.ts` |
+| Export: recht, Origin/CSRF, methode, CSV-header, formule-injectie, geen tokens, audit zonder persoonsgegevens | `roles.test.ts` |
+| Toegankelijkheid van lid-, import-, koppelingen- en gefilterde ledenschermen (axe) | `browser.test.ts` |
+
+Alle testgegevens zijn synthetisch (`example.test`-adressen, verzonnen namen).
+
 ## Bekende gaten in de tests
+- Het **koppelscherm van de import** is end-to-end in Chromium getest; de afzonderlijke server actions voor lidmaatschap/archiveren/verwijderen zijn via de domeinfuncties getest en door `requireStaff` beschermd, maar niet met een ruw POST-verzoek per rol aangeroepen.
 - **Server actions** worden via de pagina's en de `requireStaff`-guard beschermd en de routes zijn e2e getest, maar elke afzonderlijke action is niet met een ruw POST-verzoek aangeroepen door een onbevoegde rol.
 - **MFA-inrichting** (TOTP scannen/bevestigen) is niet geautomatiseerd getest; alleen de redirect-eis en de inlogstap zijn gedekt.
 - **Echte Resend-accounts** zijn niet gebruikt (alleen testmodus).

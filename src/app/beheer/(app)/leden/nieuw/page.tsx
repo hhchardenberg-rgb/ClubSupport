@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/session";
 export const metadata = { title: "Nieuw lid" };
 
 export default async function Page() {
+  await requireStaff("beheer", "members.write");
   await requireStaff("beheer", "passes.manage");
   return (
     <>

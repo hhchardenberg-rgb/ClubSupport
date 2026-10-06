@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, schema, type Tx } from "@/db";
 import { audit } from "@/lib/audit";
 import { canTransition, scanOutcomeFor, type RevocationReason, type ScanOutcome } from "@/lib/status";
 import { decryptToken, encryptToken, generatePassToken, hashToken, isWellFormedPassToken } from "@/lib/tokens";
 import { rateLimit } from "@/lib/ratelimit";
+import { amsterdamToday, effectiveMembership, isMembershipValid } from "@/lib/membership";
 
 export class DomainError extends Error {
   constructor(public code: string, message: string) {
@@ -12,7 +13,7 @@ export class DomainError extends Error {
   }
 }
 
-const { pass, member, scanEvent } = schema;
+const { pass, member, scanEvent, membership } = schema;
 
 /** Geeft een nieuwe levende pas uit. De ruwe token wordt alleen versleuteld bewaard. */
 export async function issuePassTx(tx: Tx, memberId: string, actor: string | null, id: string = randomUUID()) {
@@ -113,12 +114,16 @@ export async function reissuePass(memberId: string, actor: string, reason: "reis
   });
 }
 
-/** Verwijdert een lid (soft delete): pas direct definitief ingetrokken, lid niet meer zichtbaar, toegang ingetrokken. */
-export async function deleteMember(memberId: string, actor: string, note: string) {
+/**
+ * Verwijdert een lid (soft delete): pas direct definitief ingetrokken, lid niet meer zichtbaar, toegang tot het lid ingetrokken.
+ * Accounts en andere leden blijven bestaan. Definitief wissen gebeurt pas na de bewaartermijn (purge-job).
+ */
+export async function deleteMember(memberId: string, actor: string, note: string, opts: { requireArchived?: boolean } = {}) {
   const n = requireReason(note);
   await db.transaction(async (tx) => {
     const [m] = await tx.select().from(member).where(eq(member.id, memberId)).for("update");
     if (!m || m.deletedAt) throw new DomainError("not_found", "Lid niet gevonden");
+    if (opts.requireArchived && !m.archivedAt) throw new DomainError("archive_first", "Archiveer het lid eerst. Verwijderen kan alleen voor een gearchiveerd lid.");
     const live = await tx.select().from(pass).where(and(eq(pass.memberId, memberId), sql`${pass.status} in ('active','deactivated')`)).for("update");
     for (const p of live) await revokeTx(tx, p, "deleted", n, null);
     await tx.update(member).set({ deletedAt: new Date(), updatedAt: new Date() }).where(eq(member.id, memberId));
@@ -139,6 +144,8 @@ export function revealToken(p: { id: string; tokenCiphertext: string | null; sta
 export type ScanResult =
   | { outcome: "valid"; name: string; memberNumber: string }
   | { outcome: "inactive"; name: string; memberNumber: string }
+  /** Pas is actief, maar het lidmaatschap is niet (meer) geldig of het lid is gearchiveerd. */
+  | { outcome: "membership_invalid"; name: string; memberNumber: string }
   | { outcome: "revoked" }
   | { outcome: "unknown" }
   | { outcome: "rate_limited" };
@@ -158,7 +165,7 @@ export async function scanToken(rawToken: unknown, scannerUserId: string): Promi
     return { outcome: "unknown" };
   }
   const rows = await db
-    .select({ id: pass.id, status: pass.status, name: member.fullName, number: member.memberNumber, deletedAt: member.deletedAt })
+    .select({ id: pass.id, memberId: member.id, status: pass.status, name: member.fullName, number: member.memberNumber, deletedAt: member.deletedAt, archivedAt: member.archivedAt })
     .from(pass)
     .innerJoin(member, eq(member.id, pass.memberId))
     .where(eq(pass.tokenHash, hashToken(rawToken)))
@@ -168,14 +175,17 @@ export async function scanToken(rawToken: unknown, scannerUserId: string): Promi
     await db.insert(scanEvent).values({ scannerUserId, outcome: "unknown" });
     return { outcome: "unknown" };
   }
-  const outcome: ScanOutcome = scanOutcomeFor({ status: row.status, memberDeleted: !!row.deletedAt });
+  // Geldig = pas actief EN lidmaatschap nu geldig (datums in Europe/Amsterdam) EN lid niet gearchiveerd/verwijderd.
+  const ms = await db.select({ status: membership.status, startDate: membership.startDate, endDate: membership.endDate }).from(membership).where(eq(membership.memberId, row.memberId));
+  const membershipValid = isMembershipValid(effectiveMembership(ms, amsterdamToday()));
+  const outcome: ScanOutcome = scanOutcomeFor({ status: row.status, memberDeleted: !!row.deletedAt, memberArchived: !!row.archivedAt, membershipValid });
   await db.insert(scanEvent).values({ scannerUserId, passId: row.id, outcome });
-  if (outcome === "valid" || outcome === "inactive") return { outcome, name: row.name, memberNumber: row.number };
+  if (outcome === "valid" || outcome === "inactive" || outcome === "membership_invalid") return { outcome, name: row.name, memberNumber: row.number };
   return { outcome: "revoked" }; // definitief ingetrokken/verwijderd: geen persoonsgegevens
 }
 
 export type LookupResult =
-  | { ok: true; results: { name: string; memberNumber: string; pass: "active" | "deactivated" | "none" }[]; tooMany: false }
+  | { ok: true; results: { name: string; memberNumber: string; pass: "active" | "deactivated" | "membership" | "none" }[]; tooMany: false }
   | { ok: true; results: []; tooMany: true }
   | { ok: false; reason: "invalid" | "rate_limited" };
 
@@ -197,7 +207,7 @@ export async function lookupMembers(rawQuery: unknown, scannerUserId: string): P
   const byNumber = sql`lower(${member.memberNumber}) = lower(${q})`;
   const fuzzy = q.length >= LOOKUP_MIN_CHARS ? sql` or ${member.memberNumber} ilike ${esc + "%"} or ${member.fullName} ilike ${"%" + esc + "%"}` : sql``;
   const rows = await db
-    .select({ name: member.fullName, memberNumber: member.memberNumber, passStatus: pass.status })
+    .select({ id: member.id, name: member.fullName, memberNumber: member.memberNumber, passStatus: pass.status, archivedAt: member.archivedAt })
     .from(member)
     .leftJoin(pass, and(eq(pass.memberId, member.id), sql`${pass.status} in ('active','deactivated')`))
     .where(and(sql`${member.deletedAt} is null`, sql`(${byNumber}${fuzzy})`))
@@ -205,9 +215,17 @@ export async function lookupMembers(rawQuery: unknown, scannerUserId: string): P
     .limit(LOOKUP_MAX_RESULTS + 1);
   await db.insert(scanEvent).values({ scannerUserId, outcome: "lookup", resultCount: rows.length });
   if (rows.length > LOOKUP_MAX_RESULTS) return { ok: true, results: [], tooMany: true };
+  // "active" alleen als pas én lidmaatschap nu geldig zijn; anders "membership" (pas actief, lidmaatschap/archief niet).
+  const today = amsterdamToday();
+  const ms = rows.length ? await db.select({ memberId: membership.memberId, status: membership.status, startDate: membership.startDate, endDate: membership.endDate }).from(membership).where(inArray(membership.memberId, rows.map((r) => r.id))) : [];
+  const valid = (id: string) => isMembershipValid(effectiveMembership(ms.filter((x) => x.memberId === id), today));
   return {
     ok: true,
     tooMany: false,
-    results: rows.map((r) => ({ name: r.name, memberNumber: r.memberNumber, pass: r.passStatus === "active" ? "active" : r.passStatus === "deactivated" ? "deactivated" : "none" })),
+    results: rows.map((r) => ({
+      name: r.name,
+      memberNumber: r.memberNumber,
+      pass: r.passStatus === "active" ? (valid(r.id) && !r.archivedAt ? "active" : "membership") : r.passStatus === "deactivated" ? "deactivated" : "none",
+    })),
   };
 }

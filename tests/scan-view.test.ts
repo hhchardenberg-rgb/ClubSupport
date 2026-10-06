@@ -28,3 +28,15 @@ describe("scanner toont nooit 'geldig' zonder geslaagde serverbevestiging (test 
     expect(interpretScan(200, { outcome: "unknown" }).kind).toBe("unknown");
   });
 });
+
+describe("lidmaatschap in de scannerweergave (fail-safe)", () => {
+  it("membership_invalid toont alleen met exact verwachte vorm 'lidmaatschap niet geldig', nooit GELDIG", async () => {
+    const { interpretScan, interpretLookup } = await import("@/lib/scan-view");
+    expect(interpretScan(200, { outcome: "membership_invalid", name: "A", memberNumber: "1" })).toEqual({ kind: "membership", name: "A", memberNumber: "1" });
+    expect(interpretScan(200, { outcome: "membership_invalid" })).toEqual({ kind: "unchecked" }); // afwijkende vorm: niet gecontroleerd
+    expect(interpretScan(200, { outcome: "membership_invalid", name: "", memberNumber: "1" })).toEqual({ kind: "unchecked" });
+    expect(interpretScan(200, { outcome: "membership_valid", name: "A", memberNumber: "1" })).toEqual({ kind: "unchecked" });
+    expect(interpretLookup(200, { ok: true, tooMany: false, results: [{ name: "A", memberNumber: "1", pass: "membership" }] })).toEqual({ kind: "results", results: [{ name: "A", memberNumber: "1", pass: "membership" }] });
+    expect(interpretLookup(200, { ok: true, tooMany: false, results: [{ name: "A", memberNumber: "1", pass: "ended" }] })).toEqual({ kind: "unchecked" });
+  });
+});

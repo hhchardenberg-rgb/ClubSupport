@@ -8,6 +8,7 @@ export const metadata = { title: "Controlelogboek" };
 const OUTCOME: Record<string, { label: string; tone: "ok" | "warn" | "bad" | "plain" }> = {
   valid: { label: "Geldig", tone: "ok" },
   inactive: { label: "Pas gedeactiveerd", tone: "warn" },
+  membership_invalid: { label: "Lidmaatschap niet geldig", tone: "warn" },
   revoked: { label: "Ingetrokken of verwijderd", tone: "bad" },
   unknown: { label: "Onbekende code", tone: "bad" },
   rate_limited: { label: "Geblokkeerd (te veel)", tone: "warn" },

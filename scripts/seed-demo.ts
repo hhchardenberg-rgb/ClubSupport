@@ -64,6 +64,7 @@ async function create() {
       await tx.insert(schema.user).values({ id, name: a.name, email: a.email, role: a.role, emailVerified: true });
       for (const m of a.members) {
         const [row] = await tx.insert(schema.member).values({ memberNumber: m.nr, fullName: m.name, email: a.email, membershipNote: "demo" }).returning();
+        await tx.insert(schema.membership).values({ memberId: row.id, status: "active", statusNote: "demo" });
         await issuePassTx(tx, row.id, null);
         await tx.insert(schema.accountMemberAccess).values({ userId: id, memberId: row.id });
       }

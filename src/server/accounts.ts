@@ -4,6 +4,8 @@ import { db, schema, type Tx } from "@/db";
 import { audit } from "@/lib/audit";
 import { isStaff } from "@/lib/permissions";
 import { DomainError, issuePassTx } from "./passes";
+import { amsterdamToday, effectiveMembership, isMembershipValid, type EffectiveMembership } from "@/lib/membership";
+import { cleanDates, createMembershipTx, membershipsFor } from "./memberships";
 
 const { member, user, accountMemberAccess, emailOutbox, pass } = schema;
 
@@ -39,6 +41,10 @@ export type CreateMemberInput = {
   fullName: string;
   email: string | null;
   membershipNote?: string | null;
+  /** Optionele stabiele externe referentie (alternatieve matchsleutel bij import). */
+  externalRef?: string | null;
+  /** Lidmaatschap bij aanmaken; standaard een lopend lidmaatschap zonder datums. */
+  membership?: { status?: "active" | "suspended"; startDate?: string | null; endDate?: string | null; note?: string | null };
   /** Beheerder bevestigt expliciet dat dit lid aan een bestaand account wordt gekoppeld. */
   confirmLinkExisting?: boolean;
 };
@@ -58,9 +64,12 @@ export async function createMemberWithPassTx(tx: Tx, actor: string, input: Creat
       fullName: input.fullName.trim(),
       email,
       membershipNote: input.membershipNote ?? null,
+      externalRef: input.externalRef?.trim() || null,
       createdBy: actor,
     })
     .returning();
+  const dates = cleanDates(input.membership?.startDate, input.membership?.endDate);
+  await createMembershipTx(tx, actor, m.id, { status: input.membership?.status ?? "active", ...dates, note: input.membership?.note ?? null });
   const { passId } = await issuePassTx(tx, m.id, actor);
   await audit({ actor, action: "member.create", targetType: "member", targetId: m.id, metadata: { passId } }, tx);
 
@@ -130,22 +139,53 @@ export async function unlinkMemberFromAccount(actor: string, memberId: string, u
   });
 }
 
-/** Passen die expliciet aan dit account zijn gekoppeld — de enige toegangsroute voor leden (IDOR-veilig). */
-export async function listPassesForAccount(userId: string) {
-  return db
+export type AccountMemberView = {
+  memberId: string;
+  fullName: string;
+  memberNumber: string;
+  passId: string | null;
+  passStatus: string | null;
+  tokenCiphertext: string | null;
+  membership: EffectiveMembership;
+  membershipStart: string | null;
+  membershipEnd: string | null;
+  /** Pas actief EN lidmaatschap geldig: alleen dan toont de ledenomgeving een QR. */
+  valid: boolean;
+};
+
+/**
+ * Leden die expliciet aan dit account zijn gekoppeld (account_member_access, niet ingetrokken), met hun lidmaatschaps-
+ * en passtatus — de enige toegangsroute voor leden (IDOR-veilig). Verwijderde en gearchiveerde leden worden niet getoond.
+ * Bevat bewust geen beheerdersnotities, e-mailadres of auditgegevens.
+ */
+export async function listMembersForAccount(userId: string): Promise<AccountMemberView[]> {
+  const rows = await db
     .select({
-      passId: pass.id,
-      status: pass.status,
-      tokenCiphertext: pass.tokenCiphertext,
       memberId: member.id,
       fullName: member.fullName,
       memberNumber: member.memberNumber,
+      passId: pass.id,
+      passStatus: pass.status,
+      tokenCiphertext: pass.tokenCiphertext,
     })
     .from(accountMemberAccess)
     .innerJoin(member, eq(member.id, accountMemberAccess.memberId))
-    .innerJoin(pass, and(eq(pass.memberId, member.id), sql`${pass.status} in ('active','deactivated')`))
-    .where(and(eq(accountMemberAccess.userId, userId), isNull(accountMemberAccess.revokedAt), isNull(member.deletedAt)))
-    .orderBy(member.fullName);
+    .leftJoin(pass, and(eq(pass.memberId, member.id), sql`${pass.status} in ('active','deactivated')`))
+    .where(and(eq(accountMemberAccess.userId, userId), isNull(accountMemberAccess.revokedAt), isNull(member.deletedAt), isNull(member.archivedAt)))
+    .orderBy(member.fullName, member.memberNumber);
+  const ms = await membershipsFor(rows.map((r) => r.memberId));
+  const today = amsterdamToday();
+  return rows.map((r) => {
+    const list = ms.get(r.memberId) ?? [];
+    const eff = effectiveMembership(list, today);
+    const cur = list.find((x) => x.status !== "ended") ?? list[0];
+    return { ...r, membership: eff, membershipStart: cur?.startDate ?? null, membershipEnd: cur?.endDate ?? null, valid: r.passStatus === "active" && isMembershipValid(eff) };
+  });
+}
+
+/** Compatibel met eerdere aanroepen: alleen leden met een levende pas. */
+export async function listPassesForAccount(userId: string) {
+  return (await listMembersForAccount(userId)).filter((m) => m.passId).map((m) => ({ ...m, passId: m.passId as string, status: m.passStatus as string }));
 }
 
 /** Eén pas voor een account; null als het account er geen expliciete toegang toe heeft. */

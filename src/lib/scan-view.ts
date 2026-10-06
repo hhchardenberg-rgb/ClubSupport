@@ -6,6 +6,7 @@
 export type ScanView =
   | { kind: "valid"; name: string; memberNumber: string }
   | { kind: "inactive"; name: string; memberNumber: string }
+  | { kind: "membership"; name: string; memberNumber: string }
   | { kind: "revoked" }
   | { kind: "unknown" }
   | { kind: "wait" }
@@ -25,6 +26,8 @@ export function interpretScan(status: number | null, body: unknown): ScanView {
       return isStr(b.name) && isStr(b.memberNumber) ? { kind: "valid", name: b.name, memberNumber: b.memberNumber } : { kind: "unchecked" };
     case "inactive":
       return isStr(b.name) && isStr(b.memberNumber) ? { kind: "inactive", name: b.name, memberNumber: b.memberNumber } : { kind: "unchecked" };
+    case "membership_invalid":
+      return isStr(b.name) && isStr(b.memberNumber) ? { kind: "membership", name: b.name, memberNumber: b.memberNumber } : { kind: "unchecked" };
     case "revoked":
       return { kind: "revoked" };
     case "unknown":
@@ -41,7 +44,7 @@ export function interpretScan(status: number | null, body: unknown): ScanView {
  * resultaten; elke fout/afwijking is "unchecked" (Niet gecontroleerd — verbinding nodig).
  */
 export type LookupView =
-  | { kind: "results"; results: { name: string; memberNumber: string; pass: "active" | "deactivated" | "none" }[] }
+  | { kind: "results"; results: { name: string; memberNumber: string; pass: "active" | "deactivated" | "membership" | "none" }[] }
   | { kind: "tooMany" }
   | { kind: "invalid" }
   | { kind: "wait" }
@@ -58,9 +61,9 @@ export function interpretLookup(status: number | null, body: unknown): LookupVie
   if (b.ok !== true) return { kind: "unchecked" };
   if (b.tooMany === true) return { kind: "tooMany" };
   if (b.tooMany !== false || !Array.isArray(b.results) || b.results.length > 8) return { kind: "unchecked" };
-  const out: { name: string; memberNumber: string; pass: "active" | "deactivated" | "none" }[] = [];
+  const out: { name: string; memberNumber: string; pass: "active" | "deactivated" | "membership" | "none" }[] = [];
   for (const r of b.results as Record<string, unknown>[]) {
-    if (!r || !isStr(r.name) || !isStr(r.memberNumber) || !(r.pass === "active" || r.pass === "deactivated" || r.pass === "none")) return { kind: "unchecked" };
+    if (!r || !isStr(r.name) || !isStr(r.memberNumber) || !(r.pass === "active" || r.pass === "deactivated" || r.pass === "membership" || r.pass === "none")) return { kind: "unchecked" };
     out.push({ name: r.name, memberNumber: r.memberNumber, pass: r.pass });
   }
   return { kind: "results", results: out };

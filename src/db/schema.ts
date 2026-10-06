@@ -2,6 +2,8 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
+  date,
   index,
   integer,
   jsonb,
@@ -117,11 +119,45 @@ export const member = pgTable(
     membershipNote: text("membership_note"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Optionele stabiele externe referentie (bijv. nummer uit een andere ledenbron); alternatieve matchsleutel bij import. */
+    externalRef: text("external_ref"),
+    /** Archivering: omkeerbaar, lid blijft bestaan maar is niet meer geldig/zichtbaar in de standaardlijst. */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     /** Soft delete. Permanente verwijdering volgens bewaartermijn (purge-job). */
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   },
-  (t) => [index("member_name_idx").on(t.fullName), index("member_email_idx").on(t.email)],
+  (t) => [
+    index("member_name_idx").on(t.fullName),
+    index("member_email_idx").on(t.email),
+    uniqueIndex("member_external_ref_unique").on(t.externalRef).where(sql`${t.externalRef} is not null`),
+  ],
+);
+
+/**
+ * Lidmaatschap: de relatie van een persoon (lid) met de vereniging. Afzonderlijk van lid, account en pas.
+ * Statussen: zie `lib/membership.ts`. Datums zijn kalenderdagen in de tijdzone Europe/Amsterdam; einddatum inclusief.
+ */
+export const membership = pgTable(
+  "membership",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id").notNull().references(() => member.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("active"), // active | suspended | ended
+    startDate: date("start_date", { mode: "string" }),
+    endDate: date("end_date", { mode: "string" }),
+    statusNote: text("status_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    index("membership_member_idx").on(t.memberId),
+    // Hoogstens één lopend (actief of geschorst) lidmaatschap per lid; beëindigde regels vormen de historie.
+    uniqueIndex("membership_one_open").on(t.memberId).where(sql`${t.status} in ('active','suspended')`),
+    check("membership_dates_ok", sql`${t.endDate} is null or ${t.startDate} is null or ${t.endDate} >= ${t.startDate}`),
+    check("membership_status_ok", sql`${t.status} in ('active','suspended','ended')`),
+  ],
 );
 
 export const pass = pgTable(
@@ -259,6 +295,10 @@ export const importBatch = pgTable("import_batch", {
   committedAt: timestamp("committed_at", { withTimezone: true }),
   /** Gevalideerde rijen; wordt gewist na commit of verlopen. */
   rows: jsonb("rows").$type<unknown[] | null>(),
+  /** Ruwe tabel (kop + rijen) tussen upload en voorbeeld; wordt gewist zodra het voorbeeld is gemaakt of de batch verloopt. */
+  raw: jsonb("raw").$type<string[][] | null>(),
+  /** Kolomkoppeling en matchsleutel van het voorbeeld. */
+  mapping: jsonb("mapping").$type<Record<string, unknown> | null>(),
   counts: jsonb("counts").$type<Record<string, number>>().notNull().default({}),
 });
 

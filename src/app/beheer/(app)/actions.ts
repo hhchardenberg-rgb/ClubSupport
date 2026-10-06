@@ -11,7 +11,9 @@ import { ROLES, type Role } from "@/lib/permissions";
 import { requireStaff } from "@/lib/session";
 import { createMemberWithPass, isValidEmail, linkMemberToAccount, normalizeEmail, previewAccountForEmail, unlinkMemberFromAccount } from "@/server/accounts";
 import { processOutbox, resendInvitation } from "@/server/email/outbox";
-import { commitImport, previewImport } from "@/server/import";
+import { commitImport, previewMapped, resetToMapping, startImport, type MatchKey } from "@/server/import";
+import { archiveMember, changeMembership, cleanDates, unarchiveMember, type MembershipAction } from "@/server/memberships";
+import { FIELD_KEYS, type FieldKey } from "@/lib/csv";
 import { DomainError, deactivatePass, deleteMember, reactivatePass, reissuePass, revokePass } from "@/server/passes";
 
 export type FormState = { error?: string; needsConfirm?: { email: string; members: { memberNumber: string; fullName: string }[]; isNewAccount: boolean } } | undefined;
@@ -35,7 +37,14 @@ async function flow(back: string, fn: () => Promise<string>): Promise<never> {
 export async function createMemberAction(_: FormState, f: FormData): Promise<FormState> {
   const s = await requireStaff("beheer", "members.write");
   await requireStaff("beheer", "passes.manage");
-  const input = { memberNumber: str(f, "memberNumber"), fullName: str(f, "fullName"), email: str(f, "email") || null, membershipNote: str(f, "membershipNote") || null };
+  const input = { memberNumber: str(f, "memberNumber"), fullName: str(f, "fullName"), email: str(f, "email") || null, membershipNote: str(f, "membershipNote") || null, externalRef: str(f, "externalRef") || null };
+  if (input.externalRef && !/^[A-Za-z0-9._\-/:]{1,64}$/.test(input.externalRef)) return { error: "Externe referentie mag alleen letters, cijfers en . _ - / : bevatten (max 64)." };
+  const msStatus = str(f, "msStatus") === "suspended" ? "suspended" : "active";
+  try {
+    cleanDates(str(f, "msStart"), str(f, "msEnd"));
+  } catch (e) {
+    return { error: e instanceof DomainError ? e.message : "Ongeldige datum." };
+  }
   if (!input.memberNumber || !/^[A-Za-z0-9._\-/]{1,32}$/.test(input.memberNumber)) return { error: "Lidnummer is verplicht (letters, cijfers en . _ - /, max 32)." };
   if (!input.fullName || input.fullName.length > 120) return { error: "Naam is verplicht (max 120 tekens)." };
   if (input.email && !isValidEmail(input.email)) return { error: "Ongeldig e-mailadres." };
@@ -48,10 +57,11 @@ export async function createMemberAction(_: FormState, f: FormData): Promise<For
   }
   let memberId: string;
   try {
-    const r = await createMemberWithPass(s.user.id, { ...input, confirmLinkExisting: confirm });
+    const r = await createMemberWithPass(s.user.id, { ...input, membership: { status: msStatus, startDate: str(f, "msStart") || null, endDate: str(f, "msEnd") || null }, confirmLinkExisting: confirm });
     memberId = r.memberId;
   } catch (e) {
     if (e instanceof DomainError) return { error: e.message };
+    if (/member_external_ref_unique/i.test(String(e))) return { error: "Deze externe referentie bestaat al bij een ander lid." };
     if (/duplicate key|member_member_number/i.test(String(e))) return { error: "Dit lidnummer bestaat al." };
     console.error("lid aanmaken mislukt", e instanceof Error ? e.message : "onbekend");
     return { error: "Aanmaken mislukt. Probeer het opnieuw." };
@@ -69,16 +79,23 @@ export async function updateMemberAction(f: FormData) {
     const email = str(f, "email");
     if (!fullName || fullName.length > 120) throw new DomainError("v", "Naam is verplicht (max 120 tekens).");
     if (email && !isValidEmail(email)) throw new DomainError("v", "Ongeldig e-mailadres.");
+    const externalRef = str(f, "externalRef");
+    if (externalRef && !/^[A-Za-z0-9._\-/:]{1,64}$/.test(externalRef)) throw new DomainError("v", "Externe referentie mag alleen letters, cijfers en . _ - / : bevatten (max 64).");
+    try {
     await db.transaction(async (tx) => {
       const [m] = await tx.select().from(schema.member).where(and(eq(schema.member.id, id), isNull(schema.member.deletedAt))).for("update");
       if (!m) throw new DomainError("not_found", "Lid niet gevonden.");
       await tx
         .update(schema.member)
-        .set({ fullName, email: email ? normalizeEmail(email) : null, membershipNote: str(f, "membershipNote").slice(0, 300) || null, updatedAt: new Date() })
+        .set({ fullName, email: email ? normalizeEmail(email) : null, membershipNote: str(f, "membershipNote").slice(0, 300) || null, externalRef: externalRef || null, updatedAt: new Date() })
         .where(eq(schema.member.id, id));
       // Alleen veldnamen loggen, geen waarden.
-      await audit({ actor: s.user.id, action: "member.update", targetType: "member", targetId: id, metadata: { emailChanged: (m.email ?? "") !== (email ? normalizeEmail(email) : ""), nameChanged: m.fullName !== fullName } }, tx);
+      await audit({ actor: s.user.id, action: "member.update", targetType: "member", targetId: id, metadata: { emailChanged: (m.email ?? "") !== (email ? normalizeEmail(email) : ""), nameChanged: m.fullName !== fullName, externalRefChanged: (m.externalRef ?? "") !== externalRef } }, tx);
     });
+    } catch (e) {
+      if (/member_external_ref_unique/i.test(String(e))) throw new DomainError("dup", "Deze externe referentie bestaat al bij een ander lid.");
+      throw e;
+    }
     return "Gegevens opgeslagen. Het e-mailadres van een lid wijzigt het account niet; koppelen gebeurt apart.";
   });
 }
@@ -120,19 +137,53 @@ export async function revokeAction(f: FormData) {
   const id = str(f, "memberId");
   await flow(`/beheer/leden/${id}`, async () => {
     if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig de actie met het vinkje.");
-    await revokePass(str(f, "passId"), s.user.id, "admin", str(f, "reason"));
-    return "Pas definitief ingetrokken.";
+    const kind = str(f, "kind");
+    const reason = kind === "lost" || kind === "leaked" ? kind : "admin";
+    await revokePass(str(f, "passId"), s.user.id, reason, str(f, "reason"));
+    return reason === "lost" ? "Pas als verloren gemarkeerd en definitief ingetrokken." : "Pas definitief ingetrokken.";
   });
 }
 
 export async function deleteMemberAction(f: FormData) {
-  const s = await requireStaff("beheer", "passes.manage");
+  const s = await requireStaff("beheer", "members.delete");
   const id = str(f, "memberId");
-  // Geen bulkverwijdering: altijd één lid, met reden en getypte bevestiging.
+  // Geen bulkverwijdering: altijd één lid, alleen na archivering, met reden en getypte bevestiging (het lidnummer).
   await flow(`/beheer/leden/${id}`, async () => {
-    if (str(f, "typed") !== "VERWIJDER") throw new DomainError("confirm", "Typ VERWIJDER om te bevestigen.");
-    await deleteMember(id, s.user.id, str(f, "reason"));
-    return "Lid verwijderd; de pas is direct ongeldig.";
+    const [m] = await db.select({ n: schema.member.memberNumber }).from(schema.member).where(eq(schema.member.id, id));
+    if (!m || str(f, "typed") !== m.n) throw new DomainError("confirm", "Typ het lidnummer om te bevestigen.");
+    await deleteMember(id, s.user.id, str(f, "reason"), { requireArchived: true });
+    return "Lid verwijderd; de pas is direct ongeldig. Accounts en andere leden zijn ongemoeid gelaten. Definitief wissen volgt na de bewaartermijn.";
+  });
+}
+
+export async function membershipAction(f: FormData) {
+  const s = await requireStaff("beheer", "members.write");
+  const id = str(f, "memberId");
+  await flow(`/beheer/leden/${id}`, async () => {
+    const action = str(f, "action") as MembershipAction;
+    if (!["activate", "suspend", "end", "update"].includes(action)) throw new DomainError("v", "Onbekende actie.");
+    if (action !== "update" && f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig de actie met het vinkje.");
+    await changeMembership(s.user.id, id, action, { startDate: f.has("startDate") ? str(f, "startDate") : undefined, endDate: f.has("endDate") ? str(f, "endDate") : undefined, reason: f.has("reason") ? str(f, "reason") : undefined });
+    return { activate: "Lidmaatschap actief.", suspend: "Lidmaatschap geschorst; scans zijn nu ongeldig.", end: "Lidmaatschap beëindigd; scans zijn nu ongeldig. Ledengegevens en passen blijven bewaard.", update: "Lidmaatschap bijgewerkt." }[action];
+  });
+}
+
+export async function archiveMemberAction(f: FormData) {
+  const s = await requireStaff("beheer", "members.write");
+  const id = str(f, "memberId");
+  await flow(`/beheer/leden/${id}`, async () => {
+    if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig de actie met het vinkje.");
+    await archiveMember(id, s.user.id, str(f, "reason"));
+    return "Lid gearchiveerd. Scans zijn ongeldig en het lid staat niet meer in de standaardlijst. Dit kan worden teruggedraaid.";
+  });
+}
+
+export async function unarchiveMemberAction(f: FormData) {
+  const s = await requireStaff("beheer", "members.write");
+  const id = str(f, "memberId");
+  await flow(`/beheer/leden/${id}`, async () => {
+    await unarchiveMember(id, s.user.id, str(f, "reason"));
+    return "Lid hersteld uit het archief.";
   });
 }
 
@@ -152,10 +203,12 @@ export async function linkAccountAction(f: FormData) {
 export async function unlinkAccountAction(f: FormData) {
   const s = await requireStaff("beheer", "access.manage");
   const id = str(f, "memberId");
-  await flow(`/beheer/leden/${id}`, async () => {
+  const userId = str(f, "userId");
+  // Vanaf de accountpagina terug naar die pagina, anders naar het lid.
+  await flow(str(f, "from") === "account" ? `/beheer/ledenaccounts/${encodeURIComponent(userId)}` : `/beheer/leden/${id}`, async () => {
     if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig het ontkoppelen met het vinkje.");
-    await unlinkMemberFromAccount(s.user.id, id, str(f, "userId"));
-    return "Account ontkoppeld; het lid is niet meer zichtbaar in dat account.";
+    await unlinkMemberFromAccount(s.user.id, id, userId);
+    return "Account ontkoppeld; het lid is niet meer zichtbaar in dat account. Lid, lidmaatschap en pas blijven bestaan.";
   });
 }
 
@@ -186,19 +239,44 @@ export async function previewImportAction(_: unknown, f: FormData): Promise<{ er
   if (file.size > CSV_MAX_BYTES) return { error: "Het bestand is te groot (max 1 MB)." };
   if (!/\.csv$/i.test(file.name) || !["text/csv", "text/plain", "application/vnd.ms-excel", ""].includes(file.type)) return { error: "Alleen .csv-bestanden zijn toegestaan." };
   try {
-    const p = await previewImport(s.user.id, await file.text());
+    const p = await startImport(s.user.id, await file.text());
     return { batchId: p.batchId };
   } catch (e) {
-    return { error: e instanceof Error && e.constructor.name !== "Error" ? e.message : e instanceof Error ? e.message : "Verwerken mislukt." };
+    return { error: e instanceof Error ? e.message : "Verwerken mislukt." };
   }
+}
+
+/** Stap 2: kolomkoppeling → voorbeeld. */
+export async function mapImportAction(f: FormData) {
+  const s = await requireStaff("beheer", "import");
+  const batchId = str(f, "batchId");
+  const n = Number(str(f, "cols")) || 0;
+  const columns = Array.from({ length: Math.min(n, 60) }, (_, i) => {
+    const v = str(f, `col${i}`);
+    return (FIELD_KEYS as string[]).includes(v) ? (v as FieldKey) : "";
+  });
+  const matchKey: MatchKey = str(f, "matchKey") === "externalRef" ? "externalRef" : "memberNumber";
+  await flow(`/beheer/import?batch=${encodeURIComponent(batchId)}`, async () => {
+    const p = await previewMapped(s.user.id, batchId, { columns, matchKey });
+    return `Voorbeeld gemaakt: ${p.counts.new} nieuw, ${p.counts.update} bijwerken, ${p.counts.unchanged} ongewijzigd, ${p.counts.error} met fouten, ${p.counts.review} te beoordelen. Er is nog niets opgeslagen.`;
+  });
+}
+
+export async function resetMappingAction(f: FormData) {
+  const s = await requireStaff("beheer", "import");
+  const batchId = str(f, "batchId");
+  await resetToMapping(s.user.id, batchId);
+  redirect(`/beheer/import?batch=${encodeURIComponent(batchId)}`);
 }
 
 export async function commitImportAction(f: FormData) {
   const s = await requireStaff("beheer", "import");
   const batchId = str(f, "batchId");
   await flow(`/beheer/import`, async () => {
-    const r = await commitImport(s.user.id, batchId, { confirmGroups: f.get("confirmGroups") === "on" });
-    return `Import voltooid: ${r.imported} leden aangemaakt, ${r.skipped} rijen overgeslagen. Onboardingmails zijn klaargezet.`;
+    if (f.get("confirm") !== "on") throw new DomainError("confirm", "Bevestig de import met het vinkje.");
+    const accept = f.getAll("acceptDup").map((v) => Number(v)).filter((v) => Number.isInteger(v));
+    const r = await commitImport(s.user.id, batchId, { confirm: true, confirmGroups: f.get("confirmGroups") === "on", acceptDuplicates: accept });
+    return `Import voltooid: ${r.created} nieuw, ${r.updated} bijgewerkt, ${r.unchanged} ongewijzigd, ${r.skipped} overgeslagen. Onboardingmails voor nieuwe accounts zijn klaargezet.`;
   });
 }
 

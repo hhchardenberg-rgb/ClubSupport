@@ -14,6 +14,18 @@ export function NewMemberForm() {
       <input id="fullName" name="fullName" required maxLength={120} />
       <label htmlFor="email">E-mailadres voor het account (de onboardingmail gaat hierheen)</label>
       <input id="email" name="email" type="email" maxLength={254} />
+      <label htmlFor="externalRef">Externe referentie (optioneel, uniek; bijv. nummer uit een andere ledenbron)</label>
+      <input id="externalRef" name="externalRef" maxLength={64} pattern="[A-Za-z0-9._\-/:]+" />
+      <fieldset style={{ border: 0, padding: 0, margin: "16px 0 0" }}>
+        <legend><strong>Lidmaatschap</strong></legend>
+        <label htmlFor="msStatus">Status</label>
+        <select id="msStatus" name="msStatus" defaultValue="active"><option value="active">Actief</option><option value="suspended">Geschorst</option></select>
+        <label htmlFor="msStart">Begindatum (optioneel)</label>
+        <input id="msStart" name="msStart" type="date" />
+        <label htmlFor="msEnd">Einddatum (optioneel, laatste geldige dag)</label>
+        <input id="msEnd" name="msEnd" type="date" />
+        <p className="muted">Zonder datums loopt het lidmaatschap tot een beheerder het beëindigt. Een pas is alleen geldig als ook het lidmaatschap geldig is.</p>
+      </fieldset>
       <label htmlFor="membershipNote">Notitie (optioneel, heeft geen invloed op de geldigheid van de pas)</label>
       <input id="membershipNote" name="membershipNote" maxLength={300} />
       {state?.needsConfirm && (

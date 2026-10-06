@@ -10,7 +10,9 @@ export const PERMISSIONS = [
   "scan", // pas scannen
   "members.lookup", // beperkt zoeken (naam/lidnummer) voor controle zonder pas: alleen naam, lidnummer, passtatus
   "members.read",
-  "members.write",
+  "members.write", // leden en lidmaatschappen wijzigen, archiveren
+  "members.delete", // lid definitief laten verwijderen (na archivering, volgens bewaartermijn)
+  "members.export", // ledenlijst exporteren (CSV)
   "passes.manage", // aanmaken, deactiveren, heruitgeven, verwijderen
   "access.manage", // account <-> lid koppelen
   "import",
@@ -21,7 +23,7 @@ export const PERMISSIONS = [
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
-const MANAGER: Permission[] = ["scan", "members.lookup", "scanlog.read", "members.read", "members.write", "passes.manage", "access.manage", "import", "email.view"];
+const MANAGER: Permission[] = ["scan", "members.lookup", "scanlog.read", "members.read", "members.write", "members.delete", "members.export", "passes.manage", "access.manage", "import", "email.view"];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   member: ["member.self"],

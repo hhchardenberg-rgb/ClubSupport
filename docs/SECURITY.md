@@ -9,12 +9,15 @@ Status: **ontwerp en implementatie getoetst met eigen tests, niet extern geaudit
 | **Accountovername** (lid of staf) | Wachtwoord ≥ 12 tekens door Better Auth gehasht; inlogbegrenzing 5/5 min/IP; generieke foutmeldingen; MFA (TOTP) verplicht voor manager/sysadmin; sessies 24 uur, `HttpOnly`/`Secure`/`SameSite=Lax`; bij wachtwoordreset alle sessies ingetrokken; blokkeren van staf beëindigt sessies direct | Geen wachtwoord-lekcontrole (breach-check); MFA voor scanner standaard uit (`REQUIRE_MFA_SCANNER`); IP-limiet leunt op `x-forwarded-for` van Vercel |
 | **Gestolen/gekopieerde (screenshot) QR** | QR = opaque bearer-token; scanner toont altijd naam + lidnummer ter vergelijking; directe, onomkeerbare intrekking/heruitgifte; scanlog toont wie/wanneer | **Een statische QR kan worden gekopieerd en blijft geldig tot intrekking.** Dit is bewust zo gedocumenteerd en wordt niet "opgelost" |
 | **Token raden/enumeratie** | 256 bit entropie; formaatcontrole; HMAC-lookup; generiek "onbekend"-antwoord; rate limits per controleur (60/min) en per IP (120/min); geen persoonsgegevens bij onbekende code | Verwaarloosbaar; wel volume-DoS op de endpoint (platformniveau) |
-| **Misbruik scannerrechten** | Persoonlijke accounts; alleen sysadmin kent rollen toe; scanner ziet alleen uitkomst + naam + lidnummer, geen lijst/zoekfunctie; scanlog; rol-/blokkeerwijziging beëindigt sessies | Een kwaadwillende controleur kan namen van gescande leden zien (noodzakelijk voor de taak) |
+| **Misbruik scannerrechten** | Persoonlijke accounts; alleen sysadmin kent rollen toe; scanner ziet alleen uitkomst + naam + lidnummer; beperkte zoekfunctie (min. 3 tekens, max. 8 resultaten, alleen naam/lidnummer/status, begrensd, zonder zoekterm gelogd); scanlog; rol-/blokkeerwijziging beëindigt sessies | Een kwaadwillende controleur kan namen van gescande leden zien (noodzakelijk voor de taak) |
 | **Onbevoegde ledeninzage (IDOR/BOLA)** | Leden bereiken passen alleen via `account_member_access`; pasroutes antwoorden 404 bij andermans id; lijst en detail gebruiken dezelfde expliciete koppeling; geen koppeling op e-mailgelijkheid | Foutieve koppeling door een beheerder (mitigatie: preview + bevestiging + audit) |
 | **Gestolen beheeraccount** | MFA verplicht; minimale rechten; audit; beheerrollen nooit gedeeld; sessie-intrekking; bevestiging + reden bij risicovolle acties; geen bulkverwijdering | Gestolen MFA-apparaat + wachtwoord; audit is aanvullend, niet preventief |
 | **Gegevenslekken** | Dataminimalisatie (QR/audit/scanlog zonder PII of token); versleutelde tokenopslag; secrets alleen server-side (Sensitive env vars); CSP, `no-store`, geen caching van persoonlijke data; bewaartermijnen + opruimjob; regio `fra1` | Databaseprovider-/Vercel-configuratie buiten de code; EU-regio van Neon moet door de club worden bevestigd |
 | **Onjuiste intrekking / onterecht geldig** | Eén statusmodule; database is bron van waarheid; fail-safe scanner; onomkeerbare `revoked`; unieke index op token en op één levende pas; alle statuswijzigingen geaudit met reden | Offline kopieën op toestellen (niet leidend); menselijke fouten bij heractiveren (bevoegd account + reden + audit) |
-| **Upload/CSV-misbruik** | Alleen `.csv`, max 1 MB/5000 rijen; kolommen op allowlist; velden valideren en lengtes begrenzen; waarden als tekst gerenderd (React-escaping), nooit als HTML; export-helper neutraliseert formule-injectie; preview wordt na commit gewist | Er is nog geen export-functie in de UI; de helper (`csvCell`) is getest maar nog niet gebruikt |
+| **Upload/CSV-misbruik** | Alleen `.csv`, max 1 MB/5000 rijen; kolomkoppeling op een vaste lijst velden; velden valideren en lengtes begrenzen; waarden als tekst gerenderd (React-escaping), nooit als HTML; export neutraliseert formule-injectie (`csvCell`); ruwe tabel en voorbeeld worden na verwerken gewist en verlopen na 1 uur; expliciete bevestiging; nooit samenvoegen op e-mail/naam | Het tijdelijk bewaarde bestand (≤ 1 uur) bevat persoonsgegevens in de database |
+| **Onbevoegde export / datalek via export** | Recht `members.export` (manager, sysadmin) + MFA; alleen POST met eigen Origin; limiet 10/uur per account; `no-store`; nooit tokens in het bestand; elke export geaudit (filters, aantal; geen persoonsgegevens) | Een bevoegde beheerder kan een export lekken; de club bepaalt wie dit recht krijgt en hoe het bestand wordt bewaard |
+| **Onterecht geldige pas na einde lidmaatschap** | Scan is alleen geldig bij actieve pas **én** geldig lidmaatschap (datums Europe/Amsterdam), zonder lidmaatschap ongeldig; archiveren maakt scans ongeldig; één statusmodule | Een offline kopie of gekopieerde QR toont nog iets op een toestel; alleen de online scanner is leidend. Contributiebetaling is bewust geen invoer |
+| **Ongewenst verwijderen/cascade** | Archiveren en verwijderen zijn aparte stappen; verwijderen alleen na archivering, per lid, met reden, getypt lidnummer en impactoverzicht; accounts en andere leden blijven bestaan; wissen pas na de bewaartermijn | Menselijke fout binnen de bewaartermijn: het lid is dan wel zichtbaar verwijderd, maar nog niet gewist |
 | **CSRF / open redirects** | Next.js Origin-controle voor server actions; eigen routes eisen eigen Origin; geen redirect met door gebruikers aangeleverde URL; `SameSite=Lax` | — |
 | **XSS** | React-escaping, CSP met nonce (`script-src 'self' 'nonce-…' 'strict-dynamic'`), `object-src 'none'`, `frame-ancestors 'none'`; enige `dangerouslySetInnerHTML` is de zelf gegenereerde QR-SVG | `style-src 'unsafe-inline'` (nodig voor de huidige inline stijlen) |
 
@@ -27,16 +30,22 @@ Rechten zijn gedefinieerd in `src/lib/permissions.ts` en worden **server-side** 
 | Eigen gekoppelde passen/leden zien, offline kopie bewaren | ✔ | – | – | – |
 | Pas scannen (`/api/scan`, `/scanner`) | – | ✔ | ✔ | ✔ |
 | Leden zoeken/bekijken (`/beheer/leden`) | – | – | ✔ | ✔ |
-| Leden aanmaken/wijzigen | – | – | ✔ | ✔ |
-| Passen deactiveren, heractiveren, heruitgeven, intrekken, lid verwijderen | – | – | ✔ | ✔ |
+| Leden en lidmaatschappen aanmaken/wijzigen (schorsen, beëindigen, datums), archiveren | – | – | ✔ | ✔ |
+| Passen blokkeren, heractiveren, vervangen, intrekken/als verloren markeren | – | – | ✔ | ✔ |
+| Lid definitief verwijderen (na archivering) | – | – | ✔ | ✔ |
+| Ledenlijst exporteren (CSV) | – | – | ✔ | ✔ |
 | Account ↔ lid koppelen/ontkoppelen | – | – | ✔ | ✔ |
-| CSV-import | – | – | ✔ | ✔ |
+| CSV-import (kolomkoppeling, voorbeeld, bevestigen) | – | – | ✔ | ✔ |
+| Koppelingenpagina ledenaccounts | – | – | ✔ | ✔ |
 | Mail-afleverstatus, uitnodiging opnieuw sturen | – | – | ✔ | ✔ |
 | Staf-accounts aanmaken, rol wijzigen, blokkeren, e-mail wijzigen | – | – | – | ✔ |
 | Auditlog inzien | – | – | – | ✔ |
 | MFA verplicht | – | optioneel | ✔ | ✔ |
 
 Aanvullende regels: een beheerder kan zijn eigen rol niet wijzigen of zichzelf blokkeren; er blijft altijd ≥ 1 actieve sysadmin; staf-adressen kunnen niet voor ledenaccounts worden gebruikt; een lid kan passtatus of eigen lidnummer nooit wijzigen (er bestaat geen schrijfpad voor leden).
+
+### Ledenadministratie: privacy en dataminimalisatie
+Verzameld per lid: lidnummer, naam, optioneel e-mailadres, optionele externe referentie, optionele notitie en het lidmaatschap (status + begin-/einddatum). **Bewust niet** toegevoegd: geboortedatum, adres, telefoon, bankgegevens of andere gevoelige velden — pas toevoegen bij aantoonbare functionele noodzaak en na aanpassing van dit overzicht. Notities zijn alleen zichtbaar voor beheer en staan nooit in de ledenomgeving of de scanner. Leden zien uitsluitend hun eigen, expliciet gekoppelde leden en geen interne reden bij een schorsing of beëindiging. Het audit-spoor van een lid bevat actie, tijd, actor en reden (vrije tekst van de beheerder: schrijf daar geen persoonsgegevens in) en nooit tokens. Bewaartermijnen: zie README.
 
 ## 3. ASVS 5.0.0-checklist (hoofdstukniveau)
 

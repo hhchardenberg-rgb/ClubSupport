@@ -14,14 +14,14 @@ Digitale ledenpas voor supportersvereniging HHC ClubSupport (HHC Hardenberg). E�
 
 1. Een beheerder voert leden handmatig in of importeert ze via CSV; er is geen openbare zelfregistratie.
 2. Eén lid heeft maximaal één levende pas (actief of gedeactiveerd); heruitgifte trekt de vorige pas definitief in.
-3. Een pas blijft geldig totdat een bevoegde beheerder die deactiveert, intrekt of het lid verwijdert. **Geen** automatische vervaldatum, betaalintegratie of ledenstatus die de geldigheid beïnvloedt.
+3. Een scan is alleen **geldig als de pas actief is én het lidmaatschap op dat moment geldig is** (zie [Ledenadministratie](#ledenadministratie)). Dit vervangt de eerdere aanname dat alleen de pas zelf telt. Er is **geen** betaalintegratie; of contributiebetaling het lidmaatschap moet beïnvloeden is een afzonderlijke, nog te nemen productbeslissing.
 4. De scanner toont geldigheid, naam en lidnummer — geen foto of overige contactgegevens.
 5. Een scan vereist een werkende internetverbinding.
 6. De onboardingmail gaat naar het door de beheerder ingevoerde adres; het lid stelt bij eerste gebruik zelf een wachtwoord in.
 7. Eén geverifieerd account kan meerdere leden en passen bevatten. Bij gedeelde e-mailadressen toont de applicatie de groepering ter bevestiging; alleen expliciet gekoppelde leden zijn zichtbaar.
 8. Overige velden, rollen en bewaartermijnen zijn configureerbaar tot de club ze vaststelt (zie [Bewaartermijnen](#bewaartermijnen)).
 
-Extra keuzes die ik heb gemaakt: *gedeactiveerd* is tijdelijk en heractiveerbaar (zelfde QR), *definitief ingetrokken* is onomkeerbaar. Voor een ingetrokken of verwijderde pas toont de scanner **geen** naam (dataminimalisatie); voor een gedeactiveerde pas wél naam en lidnummer, zodat de controleur kan handelen.
+Extra keuzes die ik heb gemaakt (naast de ledenadministratie-aannames onder [Ledenadministratie](#ledenadministratie)): *gedeactiveerd* is tijdelijk en heractiveerbaar (zelfde QR), *definitief ingetrokken* is onomkeerbaar. Voor een ingetrokken of verwijderde pas toont de scanner **geen** naam (dataminimalisatie); voor een gedeactiveerde pas wél naam en lidnummer, zodat de controleur kan handelen.
 
 ## Stack en architectuurbeslissingen
 
@@ -67,7 +67,8 @@ Toegankelijkheid: contrast (zwart/oranje/wit), grote tikdoelen (≥ 44–50 px),
 ```
 user (Better Auth)  1─n  account_member_access  n─1  member  1─n  pass
    │ role: member | scanner | manager | sysadmin         │ memberNumber (uniek), fullName, email, membershipNote, deletedAt
-   │ twoFactorEnabled, disabledAt                          └ pass: tokenHash (uniek), tokenCiphertext, status, revocationReason, …
+   │ twoFactorEnabled, disabledAt                          ├ membership: status, startDate, endDate (historie; ≤ 1 lopend)
+   │                                                       └ pass: tokenHash (uniek), tokenCiphertext, status, revocationReason, …
    ├── account_token   (activation | reset; alleen hash; verloopt; eenmalig)
    ├── email_outbox    (kind, status, attempts, providerRef; géén tokens/wachtwoorden)
    ├── audit_event     (actor, actie, doel, beperkte metadata — nooit tokens/wachtwoorden)
@@ -75,15 +76,48 @@ user (Better Auth)  1─n  account_member_access  n─1  member  1─n  pass
 import_batch (tijdelijke preview, wordt na commit gewist) · app_rate_limit · rate_limit (Better Auth)
 ```
 
-`Member` ≠ `Pass`: het lid is de persoon, de pas het uitgegeven token. `account_member_access` is de expliciete autorisatierelatie (met wie koppelde/ontkoppelde en wanneer); e-mailgelijkheid koppelt nooit automatisch.
+`Member` ≠ `Membership` ≠ `Account` ≠ `Pass`: het lid is de persoon, het lidmaatschap de relatie met de vereniging, het account de login, de pas het uitgegeven token. `account_member_access` is de expliciete autorisatierelatie (met wie koppelde/ontkoppelde en wanneer); e-mailgelijkheid koppelt nooit automatisch.
 
 ## Rollen en rechten (minimale rechten)
 
-Zie de volledige autorisatiematrix in [docs/SECURITY.md](docs/SECURITY.md). Kort: **lid** (eigen gekoppelde passen), **scanner** (alleen scannen), **manager/ledenbeheer** (leden, passen, import, koppelingen, mailstatus + scannen), **sysadmin** (alles + accounts en audit). MFA is verplicht voor manager en sysadmin; optioneel voor scanner (`REQUIRE_MFA_SCANNER=true`).
+Zie de volledige autorisatiematrix in [docs/SECURITY.md](docs/SECURITY.md). Kort: **lid** (eigen gekoppelde passen), **scanner** (alleen scannen), **manager/ledenbeheer** (leden, lidmaatschappen, passen, import, export, koppelingen, mailstatus + scannen; geen rollen/beveiliging), **sysadmin** (alles + accounts en audit). MFA is verplicht voor manager en sysadmin; optioneel voor scanner (`REQUIRE_MFA_SCANNER=true`).
+
+## Ledenadministratie
+
+Vier afzonderlijke begrippen, met expliciete koppelingen en elk een eigen status:
+
+| Begrip | Tabel | Wat | Status |
+|---|---|---|---|
+| **Lid** | `member` | de persoon: lidnummer (uniek, onveranderlijk), naam, optioneel e-mail, optionele externe referentie, notitie | gearchiveerd (`archived_at`, omkeerbaar) · verwijderd (`deleted_at`, wissen na bewaartermijn) |
+| **Lidmaatschap** | `membership` | relatie met de vereniging, met begin- en einddatum (kalenderdagen, Europe/Amsterdam, einddatum = laatste geldige dag) | opgeslagen: `active` · `suspended` · `ended`; afgeleid: *geldig*, *nog niet gestart*, *verlopen*, *geschorst*, *beëindigd*, *geen lidmaatschap* |
+| **Account** | `user` + `account_member_access` | de login; één account kan **expliciet** aan meerdere leden zijn gekoppeld (gezin) | geactiveerd / niet geactiveerd / geblokkeerd |
+| **Ledenpas** | `pass` | digitale pas van **één** lid met eigen QR-token | `active` · `deactivated` · `revoked` |
+
+**Scanregel** (`src/lib/status.ts`, de enige plek): geldig ⇔ pas `active` **én** lid niet verwijderd/gearchiveerd **én** lidmaatschap nu geldig. Alle andere combinaties zijn ongeldig; zonder lidmaatschapsregel is een scan ongeldig (fail-safe). De scanner toont dan *ONGELDIG · Lidmaatschap niet geldig* met alleen naam en lidnummer; de reden (beëindigd/geschorst/verlopen) wordt bewust niet naar de scanner gestuurd. Een Wallet-pas bestaat niet meer in deze app (door de club afgevoerd), dus er is geen Wallet-synchronisatie nodig; een offline kopie op het toestel van een lid toont nooit een QR voor een niet-geldig lidmaatschap en blijft slechts een weergave: **de scanner is altijd leidend**.
+
+**Statusbetekenis** (ook in de app uitgelegd op de lidpagina):
+- *Geldig*: actief, begindatum bereikt (of leeg), einddatum niet voorbij (of leeg). *Nog niet gestart*: actief, begindatum in de toekomst. *Verlopen*: actief, einddatum voorbij. *Geschorst*: door een beheerder, nooit geldig ongeacht datums, weer te activeren. *Beëindigd*: nooit geldig; een nieuw lidmaatschap start als nieuwe regel (historie blijft). Hoogstens één lopend (actief/geschorst) lidmaatschap per lid (unieke index).
+- Een actief account maakt een niet-geldig lidmaatschap niet geldig, en een actieve pas evenmin.
+- *Gearchiveerd*: lid uit de standaardlijsten, scans ongeldig, niet zichtbaar in de ledenomgeving; **niets wordt gewist** en het is omkeerbaar. *Verwijderen* is een aparte stap die alleen na archivering kan, per lid, met reden, getypt lidnummer en een overzicht van wat het raakt; de pas wordt direct ingetrokken en na de bewaartermijn wordt het lid definitief gewist. Accounts en andere gekoppelde leden worden daarbij **nooit** verwijderd.
+- Betaling/contributie: geen invloed (niet gebouwd; productbeslissing nog open).
+
+**Beheer** (`/beheer`): ledenlijst met zoeken (naam, lidnummer, externe referentie) en filters op lidmaatschap, pas en archief · lidpagina met overzicht (lidmaatschap, pas, accounts, "scan nu geldig?"), statusuitleg, lidmaatschap starten/schorsen/activeren/beëindigen/datums, pas blokkeren/vervangen/intrekken/als verloren markeren, gegevens, accounts (met "ook gekoppeld aan"), historie (audit per lid), archiveren/herstellen/verwijderen · **Koppelingen** (`/beheer/ledenaccounts`): per ledenaccount de gekoppelde leden met statussen en ontkoppelen · import en export.
+
+**Ledenomgeving**: een account ziet alleen expliciet gekoppelde, niet-verwijderde en niet-gearchiveerde leden, elk met eigen lidmaatschaps- en passtatus (en pas/QR alleen als geldig), plus een lijst "Gekoppelde leden". Geen beheerdersnotities, audit- of andere accountgegevens. Toegang wordt server-side bepaald via `account_member_access`; er zijn geen ledenroutes met een lid-ID in de URL.
+
+**E-mail is nooit een identiteit**: meerdere leden mogen hetzelfde adres hebben; er wordt nooit automatisch samengevoegd of gekoppeld op e-mail, naam of iets anders. Adressen worden alleen getrimd en naar kleine letters gezet (zoals Better Auth doet); plus-adressen en andere varianten blijven aparte adressen. Bij meerdere leden voor één nieuw account gaat er maximaal één uitnodiging uit (idempotente sleutel per account).
+
+### CSV-import en -export
+Import in vier stappen: **upload → kolomkoppeling → voorbeeld → bevestigen**. Herkende kolommen: `lidnummer`, `naam`, `email`, `notitie`, `externe_referentie`, `lidmaatschap` (actief/geschorst/beëindigd), `begindatum`, `einddatum` (JJJJ-MM-DD of DD-MM-JJJJ); andere kolomnamen koppelt de beheerder zelf. Matchsleutel voor bestaande leden: **lidnummer** (standaard) of een gekozen **externe referentie**; nooit e-mail. Per rij toont het voorbeeld *nieuw / bijwerken (met velden) / ongewijzigd / fout / te beoordelen*. Gedeelde e-mailadressen zijn toegestaan (groepering ter bevestiging). Dubbele lidnummers in het bestand zijn een fout; een lidnummer dat bij een ander lid hoort of afwijkt van het gematchte lid wordt geweigerd; gearchiveerde/verwijderde leden worden niet bijgewerkt. **Mogelijke dubbele personen** (zelfde naam na normalisatie bij een ander lidnummer) worden gesignaleerd en alleen op expliciete keuze per regel als nieuw lid geïmporteerd — nooit samengevoegd. Bijwerken wijzigt alleen opgegeven (niet-lege) velden, maakt geen account/uitnodiging/pas aan, en leegmaken via import bestaat niet. Verwerken vraagt expliciete bevestiging en gebeurt in één transactie; herhaald importeren geeft geen dubbele leden, passen of uitnodigingen. Het ruwe bestand en het voorbeeld worden na verwerken gewist (en verlopen na 1 uur); het bestand zelf wordt nooit opgeslagen.
+
+Export (`POST /api/beheer/export`, knop op de ledenlijst; recht `members.export`): CSV van de huidige selectie met lidnummer, naam, e-mail, externe referentie, lidmaatschap + datums, passtatus, gearchiveerd en notitie — **nooit tokens**. Origin-controle (CSRF), MFA, limiet 10/uur per account, `no-store`, formule-injectie geneutraliseerd, en elke export staat in het auditlog (filters en aantal, geen persoonsgegevens).
+
+### Migratie en terugdraaien
+Migratie `drizzle/0004_ledenadministratie.sql` voegt `membership`, `member.external_ref`, `member.archived_at` en `import_batch.raw/mapping` toe en maakt voor **elk bestaand niet-verwijderd lid een lopend lidmaatschap zonder datums** aan (idempotent), zodat bestaande passen en koppelingen na de migratie ongewijzigd geldig blijven. Maak vóór de eerste productiedeploy een Neon-back-up/branch. Terugdraaien: eerst de code van vóór deze wijziging terugzetten en daarna eventueel `drop table membership; alter table member drop column external_ref, drop column archived_at; alter table import_batch drop column raw, drop column mapping;` — zonder de nieuwe code is er geen lidmaatschapscontrole meer. Bestaande leden, passen en accountkoppelingen worden niet gewijzigd.
 
 ## Statusregels pas
 
-`active` → `deactivated` (reden verplicht, heractiveerbaar) · `active|deactivated` → `revoked` (definitief; via intrekken, heruitgifte of verwijderen van het lid). `revoked` heeft geen uitgaande overgangen en de versleutelde token wordt gewist.
+De pas zelf (los van het lidmaatschap): `active` → `deactivated` (reden verplicht, heractiveerbaar) · `active|deactivated` → `revoked` (definitief; via intrekken, heruitgifte of verwijderen van het lid). `revoked` heeft geen uitgaande overgangen en de versleutelde token wordt gewist.
 
 ## Lokaal starten
 
@@ -104,8 +138,8 @@ In ontwikkeling toont `bootstrap-admin` de activatielink in de terminal; met `EM
 ## Tests
 
 ```bash
-npm test            # 49 unit-/integratietests tegen een lokale Postgres (maakt zelf database clubsupport_test)
-npm run test:e2e    # bouwt en draait 28 end-to-end- en browsertests (Chromium, nepcamera, axe-toegankelijkheidscontrole)
+npm test            # 73 unit-/integratietests tegen een lokale Postgres (maakt zelf database clubsupport_test)
+npm run test:e2e    # bouwt en draait 34 end-to-end- en browsertests (Chromium, nepcamera, axe-toegankelijkheidscontrole)
 ```
 
 Voor Postgres: `TEST_ADMIN_DATABASE_URL` (standaard `postgres://postgres:postgres@localhost:5432/postgres`). Overzicht per vereiste test: [docs/TESTING.md](docs/TESTING.md).

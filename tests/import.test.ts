@@ -27,9 +27,9 @@ describe("CSV-preview (tests 6, 12)", () => {
     expect(byLine[4].errors.join()).toMatch(/Naam ontbreekt/);
     expect(byLine[5].errors.join()).toMatch(/Ongeldig e-mailadres/);
     expect(byLine[6].errors.join()).toMatch(/Dubbel lidnummer/);
-    expect(byLine[7].errors.join()).toMatch(/bestaat al/);
+    expect(byLine[7].action).toBe("update"); // bestaand lidnummer = bijwerken, geen fout en geen dubbel lid
     expect(byLine[8].errors.join()).toMatch(/Ongeldige tekens/);
-    expect(p.counts).toMatchObject({ total: 7, import: 1, error: 6 });
+    expect(p.counts).toMatchObject({ total: 7, import: 2, error: 5, new: 1, update: 1 });
     // preview voert geen acties uit
     const { db, schema } = await import("@/db");
     expect(await db.select().from(schema.member)).toHaveLength(1);
@@ -67,18 +67,20 @@ describe("CSV-preview (tests 6, 12)", () => {
     expect(p.groups).toHaveLength(1);
     expect(p.groups[0]).toMatchObject({ email: "gezin@example.test", lines: [2, 3, 4], existingAccount: false });
     expect(p.rows.filter((r) => r.errors.length)).toHaveLength(0); // geen duplicaten-fout
-    await expect(commitImport(admin, p.batchId, { confirmGroups: false })).rejects.toMatchObject({ code: "confirm_groups_required" });
+    await expect(commitImport(admin, p.batchId, { confirm: true, confirmGroups: false })).rejects.toMatchObject({ code: "confirm_groups_required" });
+    await expect(commitImport(admin, p.batchId, { confirmGroups: true })).rejects.toMatchObject({ code: "confirm_required" });
     expect(await db.select().from(schema.member)).toHaveLength(0);
     expect(sent).toHaveLength(0);
-    const r = await commitImport(admin, p.batchId, { confirmGroups: true });
-    expect(r).toEqual({ imported: 4, skipped: 0 });
+    const r = await commitImport(admin, p.batchId, { confirm: true, confirmGroups: true });
+    expect(r).toMatchObject({ imported: 4, created: 4, updated: 0, skipped: 0 });
     expect(await db.select().from(schema.member)).toHaveLength(4);
     expect((await db.select().from(schema.user).where(eq(schema.user.email, "gezin@example.test")))).toHaveLength(1);
     expect(await db.select().from(schema.accountMemberAccess)).toHaveLength(4);
     expect(sent.filter((s) => s.includes("Activeer"))).toHaveLength(2); // gezin + solo, niet 4
-    await expect(commitImport(admin, p.batchId, { confirmGroups: true })).rejects.toMatchObject({ code: "already_committed" });
+    await expect(commitImport(admin, p.batchId, { confirm: true, confirmGroups: true })).rejects.toMatchObject({ code: "already_committed" });
     const [b] = await db.select().from(schema.importBatch);
     expect(b.rows).toBeNull(); // persoonsgegevens gewist
+    expect(b.raw).toBeNull();
     const audit = JSON.stringify(await db.select().from(schema.auditEvent));
     expect(audit).not.toMatch(/gezin@example|Kind Een/); // geen onnodige persoonsgegevens in audit
   });
@@ -89,8 +91,8 @@ describe("CSV-preview (tests 6, 12)", () => {
     const a = await makeUser("admin1", "manager");
     const b = await makeUser("admin2", "manager");
     const p = await previewImport(a, CSV(["20,Goed,h@example.test,", "21,Fout,geen,"]));
-    await expect(commitImport(b, p.batchId, { confirmGroups: true })).rejects.toMatchObject({ code: "not_found" });
-    expect(await commitImport(a, p.batchId, { confirmGroups: false })).toEqual({ imported: 1, skipped: 1 });
+    await expect(commitImport(b, p.batchId, { confirm: true, confirmGroups: true })).rejects.toMatchObject({ code: "not_found" });
+    expect(await commitImport(a, p.batchId, { confirm: true, confirmGroups: false })).toMatchObject({ imported: 1, skipped: 1 });
     expect(await db.select().from(schema.member)).toHaveLength(1);
   });
 

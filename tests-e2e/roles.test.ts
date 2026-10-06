@@ -216,3 +216,104 @@ describe("zoeken door de controleur en controlelogboek (e2e)", () => {
     expect(all).toMatch(/Geldig|Onbekende code/);
   });
 });
+
+describe("ledenadministratie (e2e): lidmaatschap, export, koppelingen", () => {
+  async function postForm(path: string, who: string | undefined, fields: Record<string, string>, origin: string | null = BASE) {
+    const headers: Record<string, string> = {};
+    if (who) headers.cookie = cookies[who];
+    if (origin) headers.Origin = origin;
+    const res = await fetch(`${BASE}${path}`, { method: "POST", headers, body: new URLSearchParams(fields) });
+    return { status: res.status, text: await res.text(), type: res.headers.get("content-type") ?? "", disp: res.headers.get("content-disposition") ?? "", cache: res.headers.get("cache-control") ?? "" };
+  }
+  const scanApi = async (token: string) => (await (await fetch(`${BASE}/api/scan`, { method: "POST", headers: { "Content-Type": "application/json", Origin: BASE, cookie: cookies.scanner }, body: JSON.stringify({ code: token }) })).json()) as Record<string, unknown>;
+
+  it("een scan met beëindigd lidmaatschap is ongeldig en geeft alleen naam en lidnummer terug; zoeken toont het ook", async () => {
+    const { makeMember, tokenOf } = await import("../tests/helpers");
+    const { changeMembership } = await import("@/server/memberships");
+    const m = await makeMember(51, "Beeindigd");
+    const token = (await tokenOf(m.passId))!;
+    expect((await scanApi(token)).outcome).toBe("valid");
+    await changeMembership("manager", m.member.id, "end", { reason: "opgezegd door lid" });
+    expect(await scanApi(token)).toEqual({ outcome: "membership_invalid", name: "Beeindigd 51", memberNumber: "T51" });
+    const res = await (await fetch(`${BASE}/api/scan/lookup`, { method: "POST", headers: { "Content-Type": "application/json", Origin: BASE, cookie: cookies.scanner }, body: JSON.stringify({ q: "T51" }) })).json();
+    expect(res.results[0]).toEqual({ name: "Beeindigd 51", memberNumber: "T51", pass: "membership" });
+    await changeMembership("manager", m.member.id, "activate", { startDate: "", reason: "heraanmelding" });
+    expect((await scanApi(token)).outcome).toBe("valid"); // dezelfde pas, nieuw lidmaatschap
+  });
+
+  it("de ledenomgeving toont lidmaatschapsstatus per lid en geen QR bij een niet-geldig lidmaatschap", async () => {
+    const { db, schema } = await import("@/db");
+    const { makeMember } = await import("../tests/helpers");
+    const { changeMembership } = await import("@/server/memberships");
+    const a = await makeMember(61, "Geldig Gezinslid");
+    const b = await makeMember(62, "Geschorst Gezinslid");
+    for (const m of [a, b]) await db.insert(schema.accountMemberAccess).values({ userId: "member", memberId: m.member.id, grantedBy: "manager" });
+    await changeMembership("manager", b.member.id, "suspend", { reason: "onderzoek" });
+    const html = await (await fetch(BASE + "/ledenpas", { headers: { cookie: cookies.member } })).text();
+    expect(html).toContain("Geldig Gezinslid 61");
+    expect(html).toContain("Geschorst Gezinslid 62");
+    expect(html).toContain("Geschorst"); // lidmaatschapsstatus zichtbaar
+    expect(html).toContain("Gekoppelde leden");
+    expect(html).not.toContain("onderzoek"); // geen interne reden of notities naar leden
+    expect((html.match(/aria-label="QR-code van de ledenpas/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    expect(html).not.toContain("QR-code van de ledenpas van Geschorst Gezinslid"); // geen QR bij geschorst lidmaatschap
+    expect(html).toContain("QR-code van de ledenpas van Geldig Gezinslid");
+  });
+
+  it("export: alleen met recht, eigen Origin en POST; CSV zonder tokens, formules geneutraliseerd en geaudit", async () => {
+    const { db, schema } = await import("@/db");
+    const { makeMember, tokenOf } = await import("../tests/helpers");
+    const m = await makeMember(71, "=HYPERLINK(1)");
+    const token = (await tokenOf(m.passId))!;
+    expect((await postForm("/api/beheer/export", undefined, {})).status).toBe(401);
+    expect((await postForm("/api/beheer/export", "member", {})).status).toBe(401);
+    expect((await postForm("/api/beheer/export", "scanner", {})).status).toBe(401);
+    expect((await postForm("/api/beheer/export", "manager", {}, null)).status).toBe(403);
+    expect((await postForm("/api/beheer/export", "manager", {}, "https://evil.example")).status).toBe(403);
+    expect((await fetch(`${BASE}/api/beheer/export`, { headers: { cookie: cookies.manager } })).status).toBe(405);
+    const ok = await postForm("/api/beheer/export", "manager", { q: "T71" });
+    expect(ok.status).toBe(200);
+    expect(ok.type).toContain("text/csv");
+    expect(ok.disp).toContain("attachment");
+    expect(ok.cache).toContain("no-store");
+    expect(ok.text).toContain('"lidnummer"');
+    expect(ok.text).toContain(`"'=HYPERLINK(1) 71"`.replace(" 71", " 71")); // formule-injectie geneutraliseerd
+    expect(ok.text).not.toContain(token);
+    const audit = (await db.select().from(schema.auditEvent)).filter((a) => a.action === "members.export");
+    expect(audit.length).toBeGreaterThan(0);
+    expect(JSON.stringify(audit)).not.toMatch(/T71|HYPERLINK/); // geen persoonsgegevens in het audit-spoor
+  });
+
+  it("koppelingenpagina's: alleen met access.manage; een staf-id is geen ledenaccount; lidpagina toont lidmaatschap en historie", async () => {
+    const { db, schema } = await import("@/db");
+    const { makeMember } = await import("../tests/helpers");
+    expect((await get("/beheer/ledenaccounts", "scanner")).location).toContain("/beheer/geen-toegang");
+    expect((await get("/beheer/ledenaccounts", "member")).location).toContain("/beheer/geen-toegang");
+    expect((await get("/beheer/ledenaccounts", "manager")).status).toBe(200);
+    expect((await get("/beheer/ledenaccounts/scanner", "manager")).status).toBe(404); // staf-account wordt niet getoond
+    expect((await get("/beheer/ledenaccounts/member", "manager")).status).toBe(200);
+    const m = await makeMember(81, "Detail Lid");
+    const page = await get(`/beheer/leden/${m.member.id}`, "manager");
+    expect(page.status).toBe(200);
+    expect(page.text).toContain("Lidmaatschap");
+    expect(page.text).toContain("Historie");
+    // lid/scanner kunnen een ledenpagina niet direct opvragen (IDOR)
+    for (const who of ["member", "scanner"]) expect((await get(`/beheer/leden/${m.member.id}`, who)).location).toContain("/beheer/geen-toegang");
+    void db; void schema;
+  });
+
+  it("ledenlijst filtert op lidmaatschap en archief; gearchiveerde leden staan niet in de standaardlijst", async () => {
+    const { makeMember } = await import("../tests/helpers");
+    const { archiveMember, changeMembership } = await import("@/server/memberships");
+    const a = await makeMember(91, "Archiefkandidaat");
+    const e = await makeMember(92, "Eindkandidaat");
+    await archiveMember(a.member.id, "manager", "archief test");
+    await changeMembership("manager", e.member.id, "end", { reason: "einde test" });
+    const std = await get("/beheer/leden?q=kandidaat", "manager");
+    expect(std.text).toContain("Eindkandidaat 92");
+    expect(std.text).not.toContain("Archiefkandidaat 91");
+    expect((await get("/beheer/leden?q=kandidaat&status=gearchiveerd", "manager")).text).toContain("Archiefkandidaat 91");
+    const ended = (await get("/beheer/leden?q=kandidaat&lidmaatschap=ended", "manager")).text;
+    expect(ended).toContain("Eindkandidaat 92");
+  });
+});

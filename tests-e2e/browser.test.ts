@@ -300,6 +300,54 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await ctx.close();
   });
 
+  it("beheer: import met eigen kolomnamen, kolomkoppeling, voorbeeld, bevestigen en herhaald importeren zonder dubbelen", async () => {
+    await resetLoginLimit();
+    const { db, schema } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/beheer/inloggen`);
+    await page.fill("#email", "adm@example.test");
+    await page.fill("#password", "een-lang-wachtwoord-1");
+    await page.click("button:has-text('Inloggen')");
+    await page.waitForURL((u) => !u.pathname.includes("inloggen"), { timeout: 20000 });
+    await db.update(schema.user).set({ twoFactorEnabled: true }).where(eq(schema.user.id, "adm")); // MFA-status pas na de login
+    const file = path.join((await import("node:os")).tmpdir(), `import-${Date.now()}.csv`);
+    (await import("node:fs")).writeFileSync(file, "Lidnr;Volledige naam;Mail;Lidmaatschap;Overig\nI1;Import Een;i1@example.test;actief;x\nI2;Import Twee;i1@example.test;geschorst;y\n");
+    const run = async () => {
+      await page.goto(`${BASE}/beheer/import`);
+      await page.setInputFiles("#file", file);
+      await page.click("button:has-text('Verder naar kolomkoppeling')");
+      await page.waitForSelector("text=2. Kolommen koppelen");
+      expect(await page.locator("#col3").inputValue()).toBe("membershipStatus"); // herkend
+      expect(await page.locator("#col0").inputValue()).toBe(""); // niet herkend: de beheerder koppelt zelf
+      await page.selectOption("#col0", "memberNumber");
+      await page.selectOption("#col1", "fullName");
+      await page.selectOption("#col2", "email");
+      await page.click("button:has-text('Voorbeeld tonen')");
+      await page.waitForSelector("text=3. Voorbeeld");
+    };
+    await run();
+    await shot(page, "import-voorbeeld");
+    expect(await page.locator("table >> text=Nieuw").count()).toBeGreaterThan(0);
+    expect(await db.select().from(schema.member).where(eq(schema.member.memberNumber, "I1"))).toHaveLength(0); // preview slaat niets op
+    await page.click("button:has-text('Importeren')"); // zonder bevestiging: browser blokkeert (required)
+    expect(page.url()).toContain("batch=");
+    await page.check("input[name=confirm]");
+    await page.check("input[name=confirmGroups]");
+    await page.click("button:has-text('Importeren')");
+    await page.waitForSelector("text=Import voltooid: 2 nieuw");
+    expect(await db.select().from(schema.member).where(eq(schema.member.memberNumber, "I1"))).toHaveLength(1);
+    // herhaling: ongewijzigd, geen nieuwe leden/passen/uitnodigingen
+    await run();
+    expect(await page.locator("text=Ongewijzigd").count()).toBeGreaterThan(0);
+    await page.check("input[name=confirm]").catch(() => undefined);
+    await db.update(schema.user).set({ twoFactorEnabled: false }).where(eq(schema.user.id, "adm"));
+    const members = await db.select().from(schema.member);
+    expect(members.filter((m) => m.memberNumber.startsWith("I"))).toHaveLength(2);
+    await ctx.close();
+  });
+
   it("toegankelijkheid (axe, WCAG 2.1 AA): geen overtredingen op de kernschermen", async () => {
     const axeSrc = (await import("node:fs")).readFileSync(path.resolve("node_modules/axe-core/axe.min.js"), "utf8");
     const { db, schema } = await import("@/db");
@@ -375,7 +423,7 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
       await login(pb, "beheer", "adm@example.test");
       await db.update(schema.user).set({ twoFactorEnabled: true }).where(eq(schema.user.id, "adm"));
       const [m] = await db.select().from(schema.member).limit(1);
-      for (const [n, u] of [["overzicht", "/beheer"], ["leden", "/beheer/leden"], ["nieuw lid", "/beheer/leden/nieuw"], ["lid", `/beheer/leden/${m.id}?msg=Gelukt`], ["lid foutmelding", `/beheer/leden/${m.id}?err=Fout`], ["import", "/beheer/import"]]) {
+      for (const [n, u] of [["overzicht", "/beheer"], ["leden", "/beheer/leden"], ["nieuw lid", "/beheer/leden/nieuw"], ["lid", `/beheer/leden/${m.id}?msg=Gelukt`], ["lid foutmelding", `/beheer/leden/${m.id}?err=Fout`], ["import", "/beheer/import"], ["koppelingen", "/beheer/ledenaccounts"], ["leden gearchiveerd filter", "/beheer/leden?status=gearchiveerd&lidmaatschap=ended"]]) {
         await pb.goto(BASE + u);
         await check(pb, `${tag} beheer ${n}`);
       }
