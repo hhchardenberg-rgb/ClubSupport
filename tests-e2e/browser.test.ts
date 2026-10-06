@@ -272,7 +272,7 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await ctx.close();
   });
 
-  it("ledenpas: QR-afbeelding bewaren levert een geldige PNG; afdrukken verbergt de rest", async () => {
+  it("ledenpas: Pas bewaren als afbeelding levert een geldige PNG; afdrukken verbergt de rest", async () => {
     await resetLoginLimit();
     const ctx = await browser.newContext({ ...devices["Pixel 5"], acceptDownloads: true });
     const page = await ctx.newPage();
@@ -285,14 +285,15 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await page.evaluate(() => { (navigator as unknown as { canShare?: unknown }).canShare = undefined; });
     const [download] = await Promise.all([
       page.waitForEvent("download"),
-      page.locator(".slide").first().getByRole("button", { name: "QR-afbeelding bewaren" }).click(),
+      page.locator(".slide").first().getByRole("button", { name: "Pas bewaren als afbeelding" }).click(),
     ]);
     expect(download.suggestedFilename()).toMatch(/^hhc-ledenpas-[A-Za-z0-9_-]+\.png$/);
     const path = await download.path();
     const { readFileSync } = await import("node:fs");
     const buf = readFileSync(path!);
+    if (process.env.PASS_PNG_OUT) (await import("node:fs")).writeFileSync(process.env.PASS_PNG_OUT, buf);
     expect(buf.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
-    expect(buf.length).toBeGreaterThan(2000);
+    expect(buf.length).toBeGreaterThan(20000);
     await page.emulateMedia({ media: "print" });
     const hidden = await page.locator("header, nav").first().evaluate((el) => getComputedStyle(el).visibility);
     expect(["hidden", "visible"]).toContain(hidden); // print-CSS laadt zonder fouten

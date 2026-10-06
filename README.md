@@ -133,8 +133,8 @@ Apple Wallet en Google Wallet worden **niet** gebruikt. Leden gebruiken de pas i
 ### Offline gebruik door leden
 Na inloggen bewaart de Ledenpas (met toestemming van het lid, aan/uit te zetten op het ledenscherm) een kopie van de eigen passen op het toestel, zodat de QR ook zonder internet te tonen is. De kopie verloopt na `OFFLINE_PASS_MAX_DAYS` (standaard 30, max 90), wordt bij elke online sessie ververst en bij uitloggen gewist. Een service worker (`/sw-ledenpas.js`) houdt de offline pagina en bestanden beschikbaar. Let op: een nieuw geïnstalleerde service worker neemt in sommige browsers pas na enkele seconden de pagina's over. De scanner blijft **altijd online** valideren, dus een ingetrokken pas wordt daar alsnog afgekeurd.
 
-### QR bewaren of afdrukken
-Bij elke actieve pas staan de knoppen **QR-afbeelding bewaren** (PNG; deelmenu op telefoons, anders download) en **Afdrukken** (alleen die pas). Dit gebeurt volledig op het toestel. Let op: een bewaarde afbeelding of afdruk is een kopie van de QR en blijft geldig tot de pas wordt ingetrokken; zie "Een statische QR kan worden gekopieerd".
+### Pas bewaren of afdrukken
+Bij elke actieve pas staan de knoppen **Pas bewaren als afbeelding** (de hele pas als PNG: logo, naam, lidnummer en QR; deelmenu op telefoons, anders download) en **Afdrukken** (alleen die pas). Dit gebeurt volledig op het toestel. Let op: een bewaarde afbeelding of afdruk is een kopie van de QR en blijft geldig tot de pas wordt ingetrokken; zie "Een statische QR kan worden gekopieerd".
 
 ### Zoeken door de scanner en controlelogboek
 Zonder pas kan de controleur een lid zoeken op naam of lidnummer (minimaal 3 tekens, maximaal 8 resultaten, begrensd per minuut). Het resultaat toont alleen naam, lidnummer en of er een actieve pas is. In Beheer staat onder **Controles** een doorzoekbaar controlelogboek (controleur, uitkomst, lid, periode); zoektermen worden niet vastgelegd. Op de pagina's *Controles* en *Audit* kiest u met knoppen per account wie u wilt inzien; ook vanuit *Accounts*.
