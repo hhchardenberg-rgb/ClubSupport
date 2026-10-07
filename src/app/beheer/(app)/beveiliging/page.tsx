@@ -9,7 +9,7 @@ export default async function Page() {
   return (
     <>
       <PageTitle title="Beveiliging" sub="Passkeys en herstelcodes voor je eigen account." />
-      <SecurityPanel twoFactorEnabled={!!s.user.twoFactorEnabled} mfaRequired />
+      <SecurityPanel area="beheer" twoFactorEnabled={!!s.user.twoFactorEnabled} mfaRequired />
     </>
   );
 }

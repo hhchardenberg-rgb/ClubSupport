@@ -15,7 +15,7 @@ export default async function Page() {
       <main id="main">
         <h1>Beveiliging</h1>
         <p><Link href="/ledenpas">← Terug naar je ledenpas</Link></p>
-        <SecurityPanel twoFactorEnabled={!!s.user.twoFactorEnabled} mfaRequired={false} />
+        <SecurityPanel area="ledenpas" twoFactorEnabled={!!s.user.twoFactorEnabled} mfaRequired={false} />
       </main>
     </>
   );

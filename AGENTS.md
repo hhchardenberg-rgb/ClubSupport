@@ -22,6 +22,7 @@ Taal van de interface en documentatie: **Nederlands**. Namen consequent: **HHC C
 - Oud-lid is een afgeleide categorie van het lidmaatschap (`memberCategory`), geen opgeslagen status.
 - Velden voor verificatie-/herstelcodes gebruiken altijd `NO_AUTOFILL` (`src/lib/no-autofill.ts`): geen autocomplete, geen herkenbare veldnaam, begint leeg.
 - Passkeys tellen alleen als tweede factor met verplichte gebruikersverificatie (server-side afgedwongen in `auth.ts`); wijzig dat niet zonder opnieuw te beoordelen.
+- De authenticator-app (TOTP) blijft altijd een volwaardige optie naast passkeys: nooit een passkey verplicht stellen en de TOTP-inrichting nooit verbergen of blokkeren (`MfaSetup`, `SecurityPanel`).
 - Beveiligingsmeldingen (`src/server/security.ts`) bevatten nooit wachtwoorden, codes, e-mailadressen of ruwe IP-adressen; gebruik dedupe-sleutels.
 - Een wijzigingsverzoek voert nooit iets door vóór goedkeuring; verzoeken zijn alleen voor expliciet gekoppelde leden (`listMembersForAccount`).
 - Unieke-indexfouten herken je met `isUniqueViolation` (Drizzle verpakt de pg-fout in `cause`), niet met een regex op `String(e)`.

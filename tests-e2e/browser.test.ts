@@ -369,7 +369,15 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await page.waitForURL((u) => u.pathname === "/beheer", { timeout: 20000 });
     expect((await page.goto(`${BASE}/beheer/beveiliging`))!.status()).toBe(200);
     await page.waitForSelector("text=Passkeys");
+    // de authenticator-app blijft ook met een passkey een keuze: starten vanaf de beveiligingspagina werkt
+    await page.waitForSelector("h2:has-text('Authenticator-app')");
+    await page.fill("#password", "een-lang-wachtwoord-1");
+    await page.click("button:has-text('Doorgaan')");
+    await page.waitForSelector("img[alt='QR-code om MFA in te stellen']", { timeout: 15000 });
+    expect(await page.locator("#verificatie").getAttribute("autocomplete")).toBe("off"); // ook hier geen autofill
     await ctx.close();
+    await db.delete(schema.twoFactor).where(eq(schema.twoFactor.userId, "adm"));
+    await db.update(schema.user).set({ twoFactorEnabled: false }).where(eq(schema.user.id, "adm"));
     await db.delete(schema.passkey).where(eq(schema.passkey.userId, "adm"));
   });
 

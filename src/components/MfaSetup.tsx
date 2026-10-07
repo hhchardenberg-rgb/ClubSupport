@@ -5,8 +5,12 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { NO_AUTOFILL } from "@/lib/no-autofill";
 
-/** MFA (TOTP) inrichten via de identity provider. Verplicht voor beheer-rollen. */
-export function MfaSetup({ area }: { area: "beheer" | "scanner" }) {
+/**
+ * MFA (TOTP, authenticator-app) inrichten via de identity provider. Verplicht voor beheer-rollen.
+ * De authenticator-app is ALTIJD beschikbaar, ook voor wie geen passkey heeft of gebruikt; een passkey is een extra keuze.
+ * `embedded`: op de beveiligingspagina (zonder passkey-keuze, met terugkeer naar die pagina).
+ */
+export function MfaSetup({ area, embedded = false }: { area: "beheer" | "scanner" | "ledenpas"; embedded?: boolean }) {
   const [step, setStep] = useState<"password" | "scan" | "done">("password");
   const [qr, setQr] = useState("");
   const [codes, setCodes] = useState<string[]>([]);
@@ -53,7 +57,7 @@ export function MfaSetup({ area }: { area: "beheer" | "scanner" }) {
         <h2>MFA is ingesteld</h2>
         <p>Bewaar deze herstelcodes op een veilige plek. Elke code werkt één keer.</p>
         <pre style={{ background: "#fff", padding: 12, border: "2px solid #000" }}>{codes.join("\n")}</pre>
-        <a className="btn" href={`/${area}`}>Verder</a>
+        <a className="btn" href={embedded ? `/${area}/beveiliging` : `/${area}`}>Verder</a>
       </div>
     );
   if (step === "scan")
@@ -71,14 +75,14 @@ export function MfaSetup({ area }: { area: "beheer" | "scanner" }) {
   return (
     <form method="post" onSubmit={onPassword} className="card" aria-labelledby="h">
       <h2 id="h">Tweestapsverificatie instellen</h2>
-      <p>Voor deze omgeving is MFA verplicht. Je hebt een authenticator-app nodig (bijvoorbeeld Google Authenticator of Microsoft Authenticator).</p>
+      <p>{embedded ? "Extra beveiliging met een authenticator-app" : "Voor deze omgeving is MFA verplicht."} Je hebt een authenticator-app nodig (bijvoorbeeld Google Authenticator of Microsoft Authenticator). Dit werkt op elk toestel, ook zonder passkey.</p>
       <label htmlFor="password">Bevestig met je wachtwoord</label>
       <input id="password" name="password" type="password" autoComplete="current-password" required />
       {error && <Alert variant="error">{error}</Alert>}
       <p><button disabled={busy}>Doorgaan</button></p>
-      <hr />
+      {!embedded && <><hr />
       <p className="muted">Liever geen app? Je kunt ook een <strong>passkey</strong> gebruiken (vingerafdruk, gezichtsherkenning of beveiligingssleutel). Een passkey vervangt de authenticator-app.</p>
-      <p><button type="button" className="secondary" disabled={busy} onClick={onPasskey}>Passkey instellen</button></p>
+      <p><button type="button" className="secondary" disabled={busy} onClick={onPasskey}>Passkey instellen</button></p></>}
     </form>
   );
 }

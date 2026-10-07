@@ -15,7 +15,7 @@ export default async function Page() {
       <main id="main">
         <h1>Beveiliging</h1>
         <p><Link href="/scanner">← Terug naar de scanner</Link></p>
-        <SecurityPanel twoFactorEnabled={!!s.user.twoFactorEnabled} mfaRequired={env.requireMfaForScanner} />
+        <SecurityPanel area="scanner" twoFactorEnabled={!!s.user.twoFactorEnabled} mfaRequired={env.requireMfaForScanner} />
       </main>
     </>
   );

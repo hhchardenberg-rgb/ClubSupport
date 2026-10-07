@@ -2,10 +2,11 @@
 import { Alert, Badge } from "@/components/ui";
 import { useState } from "react";
 import { noticeSecurityChange } from "@/app/security-actions";
+import { MfaSetup } from "@/components/MfaSetup";
 import { authClient } from "@/lib/auth-client";
 
 /** Eigen beveiligingsinstellingen: passkeys en herstelcodes. Beschikbaar voor leden, controleurs en beheerders. */
-export function SecurityPanel({ twoFactorEnabled, mfaRequired }: { twoFactorEnabled: boolean; mfaRequired: boolean }) {
+export function SecurityPanel({ area, twoFactorEnabled, mfaRequired }: { area: "beheer" | "scanner" | "ledenpas"; twoFactorEnabled: boolean; mfaRequired: boolean }) {
   const { data: passkeys, isPending, refetch } = authClient.useListPasskeys();
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -79,6 +80,18 @@ export function SecurityPanel({ twoFactorEnabled, mfaRequired }: { twoFactorEnab
             <div style={{ flex: "1 1 220px" }}><label htmlFor="pkname">Naam (bijv. &quot;iPhone Jan&quot;)</label><input id="pkname" name="name" maxLength={60} /></div>
             <button disabled={busy}>Passkey toevoegen</button>
           </form>
+        )}
+      </section>
+
+      <section className="card" aria-labelledby="au">
+        <h2 id="au">Authenticator-app</h2>
+        {twoFactorEnabled ? (
+          <p><Badge tone="ok">Ingesteld</Badge> Je logt in met een code uit je authenticator-app. Een passkey is een extra mogelijkheid; de authenticator-app blijft werken.</p>
+        ) : (
+          <>
+            <p className="muted">Een authenticator-app (bijv. Google Authenticator of Microsoft Authenticator) is altijd mogelijk, ook als je geen passkey hebt of gebruikt.{mfaRequired ? " Heb je al een passkey? Dan is dit een extra, tweede manier om in te loggen." : ""}</p>
+            <MfaSetup area={area} embedded />
+          </>
         )}
       </section>
 
