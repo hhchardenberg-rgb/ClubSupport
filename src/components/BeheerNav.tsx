@@ -52,8 +52,16 @@ export function BeheerNav({ links }: { links: { href: string; label: string }[] 
         toggleRef.current?.focus();
       }
     };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!navRef.current?.contains(t) && !toggleRef.current?.contains(t)) setOpen(false); // buiten tikken sluit het menu
+    };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
   }, [open]);
 
   return (

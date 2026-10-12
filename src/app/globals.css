@@ -47,9 +47,11 @@ a:hover{text-decoration-color:var(--orange)}
 .site-header .menu-toggle .chev{width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg) translateY(-2px);transition:transform .15s}
 .site-header .menu-toggle[aria-expanded="true"] .chev{transform:rotate(-135deg)}
 .site-header .menu-toggle~button{order:2;margin-left:12px}
-.site-header .in>.site-nav.collapsed{order:3;width:100%;margin-left:0;flex-direction:column;align-items:stretch;gap:0;overflow:visible;padding:0}
+.site-header .in{position:relative}
+.site-header .in>.site-nav.collapsed{position:absolute;top:calc(100% + 5px);right:16px;left:auto;width:min(340px,calc(100% - 32px));margin:0;padding:6px 16px;flex-direction:column;align-items:stretch;gap:0;overflow-x:visible;overflow-y:auto;max-height:calc(100dvh - 96px);background:var(--black);border:1px solid #444;border-top:0;box-shadow:0 14px 28px rgba(0,0,0,.35);z-index:30}
 .site-header .in>.site-nav.collapsed:not(.open){display:none}
 .site-header .site-nav.collapsed a{padding:13px 2px;border-bottom:0;border-top:1px solid #333}
+.site-header .site-nav.collapsed a:first-child{border-top:0}
 .site-header .site-nav.collapsed a[aria-current="page"]{border-left:4px solid var(--orange);padding-left:10px}
 
 /* hero (inlogpagina's) */

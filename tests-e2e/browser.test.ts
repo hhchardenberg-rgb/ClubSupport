@@ -407,8 +407,17 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await toggle.click();
     expect(await toggle.getAttribute("aria-expanded")).toBe("true");
     expect(await nav.isVisible()).toBe(true);
+    // overlay: het menu zweeft over de pagina, de inhoud schuift niet naar beneden
+    const mainTop = async () => page.locator("main").evaluate((el) => el.getBoundingClientRect().top);
+    const closedTop = await (async () => { await toggle.click(); const t = await mainTop(); await toggle.click(); return t; })();
+    await toggle.click();
+    expect(await mainTop()).toBe(closedTop);
+    expect(await nav.evaluate((el) => getComputedStyle(el).position)).toBe("absolute");
     await page.keyboard.press("Escape");
     expect(await nav.isVisible()).toBe(false);
+    await toggle.click();
+    await page.mouse.click(10, 700); // buiten het menu tikken sluit het
+    await nav.waitFor({ state: "hidden", timeout: 5000 });
     await toggle.click();
     await nav.locator("a", { hasText: "Leden" }).first().click();
     await page.waitForURL("**/beheer/leden");
