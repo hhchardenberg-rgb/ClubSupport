@@ -381,6 +381,43 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await db.delete(schema.passkey).where(eq(schema.passkey.userId, "adm"));
   });
 
+  it("beheer: menu klapt in achter een Menu-knop als alles niet naast elkaar past", async () => {
+    await resetLoginLimit();
+    const { db, schema } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/beheer/inloggen`);
+    await page.fill("#email", "adm@example.test");
+    await page.fill("#password", "een-lang-wachtwoord-1");
+    await page.click("button:has-text('Inloggen')");
+    await page.waitForURL((u) => !u.pathname.includes("inloggen"), { timeout: 20000 });
+    await db.update(schema.user).set({ twoFactorEnabled: true }).where(eq(schema.user.id, "adm"));
+    await page.goto(`${BASE}/beheer`);
+    const nav = page.locator("nav[aria-label='Beheer']");
+    const toggle = page.locator("button.menu-toggle");
+    // ook breed (kop max. 980 px) passen alle onderdelen van Systeembeheer niet naast elkaar: ingeklapt
+    await toggle.waitFor();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    // smal: ingeklapt, knop opent en sluit het menu, Escape sluit
+    await page.setViewportSize({ width: 390, height: 844 });
+    await toggle.waitFor();
+    expect(await toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(await nav.isVisible()).toBe(false);
+    await toggle.click();
+    expect(await toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(await nav.isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
+    expect(await nav.isVisible()).toBe(false);
+    await toggle.click();
+    await nav.locator("a", { hasText: "Leden" }).first().click();
+    await page.waitForURL("**/beheer/leden");
+    await nav.waitFor({ state: "hidden", timeout: 5000 }); // sluit na het kiezen van een pagina
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await ctx.close();
+    await db.update(schema.user).set({ twoFactorEnabled: false }).where(eq(schema.user.id, "adm"));
+  });
+
   it("beheer: import met eigen kolomnamen, kolomkoppeling, voorbeeld, bevestigen en herhaald importeren zonder dubbelen", async () => {
     await resetLoginLimit();
     const { db, schema } = await import("@/db");
