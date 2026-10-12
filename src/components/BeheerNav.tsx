@@ -40,6 +40,29 @@ export function BeheerNav({ links }: { links: { href: string; label: string }[] 
     return () => ro.disconnect();
   }, [measure, links.length]);
 
+  /** Paneel onder de knop uitlijnen (rechterkant gelijk aan de knop); op smalle schermen binnen de kop houden. */
+  const place = useCallback(() => {
+    const nav = navRef.current;
+    const toggle = toggleRef.current;
+    const parent = nav?.parentElement;
+    if (!nav || !toggle || !parent) return;
+    const p = parent.getBoundingClientRect();
+    const t = toggle.getBoundingClientRect();
+    const margin = 8;
+    const width = Math.min(340, p.width - 2 * margin);
+    let right = p.right - t.right;
+    right = Math.min(Math.max(right, margin - 0), Math.max(margin, p.width - width - margin));
+    nav.style.width = `${width}px`;
+    nav.style.right = `${right}px`;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open, collapsed, place]);
+
   useEffect(() => setOpen(false), [path]);
   useEffect(() => {
     if (!collapsed) setOpen(false);
