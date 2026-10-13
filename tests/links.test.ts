@@ -81,6 +81,22 @@ describe("uitnodiging, activatie en reset (tests 13, 14)", () => {
     expect(await setPasswordWithToken(t, "nog-een-wachtwoord-12345", "reset")).toMatchObject({ ok: false });
   });
 
+  it("klokverschil tussen app en database: een net ingeplande mail is meteen verwerkbaar", async () => {
+    const { requestPasswordReset, processOutbox } = await import("@/server/email/outbox");
+    const uid = await makeUser("u3", "member");
+    const ctx = await (await import("@/lib/auth")).auth.$context;
+    await ctx.internalAdapter.linkAccount({ userId: uid, providerId: "credential", accountId: uid, password: await ctx.password.hash("oud-wachtwoord-12345") });
+    await requestPasswordReset("u3@example.test");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date(Date.now() - 60_000)); // appklok loopt een minuut achter op de databaseklok
+      expect(await processOutbox()).toEqual({ sent: 1, failed: 0 });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(sent).toHaveLength(1);
+  });
+
   it("niet-geactiveerd account krijgt geen resetmail; geactiveerd account krijgt nooit een nieuwe activatiecode", async () => {
     const { db, schema } = await import("@/db");
     const { requestPasswordReset, resendInvitation } = await import("@/server/email/outbox");

@@ -51,7 +51,7 @@ export async function processOutbox(limit = 20): Promise<{ sent: number; failed:
   const due = await db
     .select({ id: emailOutbox.id })
     .from(emailOutbox)
-    .where(and(eq(emailOutbox.status, "pending"), lte(emailOutbox.nextAttemptAt, new Date())))
+    .where(and(eq(emailOutbox.status, "pending"), lte(emailOutbox.nextAttemptAt, sql`now()`)))
     .limit(limit);
 
   for (const { id } of due) {

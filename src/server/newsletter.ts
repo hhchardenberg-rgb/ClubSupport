@@ -173,7 +173,7 @@ export async function processNewsletters(limit = 40, onlyId?: string): Promise<{
     .select({ id: newsletterDelivery.id })
     .from(newsletterDelivery)
     .innerJoin(newsletter, eq(newsletter.id, newsletterDelivery.newsletterId))
-    .where(and(eq(newsletter.status, "sending"), eq(newsletterDelivery.status, "pending"), lte(newsletterDelivery.nextAttemptAt, new Date()), onlyId ? eq(newsletter.id, onlyId) : undefined))
+    .where(and(eq(newsletter.status, "sending"), eq(newsletterDelivery.status, "pending"), lte(newsletterDelivery.nextAttemptAt, sql`now()`), onlyId ? eq(newsletter.id, onlyId) : undefined))
     .limit(limit);
 
   const one = async (id: string) => {
