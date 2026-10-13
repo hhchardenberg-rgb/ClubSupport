@@ -2,6 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 
 /** Security headers + CSP met nonce per verzoek. Camera alleen in de scanner. */
 export function proxy(req: NextRequest) {
+  // Oude adressen (bv. de vercel.app-link) sturen door naar het vaste adres uit APP_URL: inloggen werkt alleen daar.
+  const legacy = (process.env.REDIRECT_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  const host = (req.headers.get("host") ?? "").toLowerCase();
+  const target = process.env.APP_URL;
+  if (target && legacy.includes(host)) {
+    return NextResponse.redirect(new URL(`${req.nextUrl.pathname}${req.nextUrl.search}`, target), 308);
+  }
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const dev = process.env.NODE_ENV !== "production";
   const csp = [
