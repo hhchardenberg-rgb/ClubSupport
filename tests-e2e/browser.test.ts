@@ -393,61 +393,65 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await page.click("button:has-text('Inloggen')");
     await page.waitForURL((u) => !u.pathname.includes("inloggen"), { timeout: 20000 });
     await db.update(schema.user).set({ twoFactorEnabled: true }).where(eq(schema.user.id, "adm"));
-    await page.goto(`${BASE}/beheer`);
-    const nav = page.locator("nav[aria-label='Beheer']");
-    const toggle = page.locator("button.menu-toggle");
-    // ook breed (kop max. 980 px) passen alle onderdelen van Systeembeheer niet naast elkaar: ingeklapt
-    await toggle.waitFor();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    // smal: ingeklapt, knop opent en sluit het menu, Escape sluit
-    await page.setViewportSize({ width: 390, height: 844 });
-    await toggle.waitFor();
-    expect(await toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(await nav.isVisible()).toBe(false);
-    await toggle.click();
-    expect(await toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(await nav.isVisible()).toBe(true);
-    // overlay: het menu zweeft over de pagina, de inhoud schuift niet naar beneden
-    const mainTop = async () => page.locator("main").evaluate((el) => el.getBoundingClientRect().top);
-    const closedTop = await (async () => { await toggle.click(); const t = await mainTop(); await toggle.click(); return t; })();
-    await toggle.click();
-    expect(await mainTop()).toBe(closedTop);
-    expect(await nav.evaluate((el) => getComputedStyle(el).position)).toBe("absolute");
-    // het paneel hangt onder de knop (rechterkanten gelijk waar het past) en blijft altijd binnen het scherm
-    for (const [w, h] of [[1280, 900], [900, 800], [600, 800], [390, 844], [320, 640]]) {
-      await page.setViewportSize({ width: w, height: h });
+    try {
+      await page.goto(`${BASE}/beheer`);
+      const nav = page.locator("nav[aria-label='Beheer']");
+      const toggle = page.locator("button.menu-toggle");
+      // ook breed (kop max. 980 px) passen alle onderdelen van Systeembeheer niet naast elkaar: ingeklapt
+      await toggle.waitFor();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      // smal: ingeklapt, knop opent en sluit het menu, Escape sluit
+      await page.setViewportSize({ width: 390, height: 844 });
+      await toggle.waitFor();
+      expect(await toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(await nav.isVisible()).toBe(false);
+      await toggle.click();
+      expect(await toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(await nav.isVisible()).toBe(true);
+      // overlay: het menu zweeft over de pagina, de inhoud schuift niet naar beneden
+      const mainTop = async () => page.locator("main").evaluate((el) => el.getBoundingClientRect().top);
+      const closedTop = await (async () => { await toggle.click(); const t = await mainTop(); await toggle.click(); return t; })();
+      await toggle.click();
+      expect(await mainTop()).toBe(closedTop);
+      expect(await nav.evaluate((el) => getComputedStyle(el).position)).toBe("absolute");
+      // het paneel hangt onder de knop (rechterkanten gelijk waar het past) en blijft altijd binnen het scherm
+      for (const [w, h] of [[1280, 900], [900, 800], [600, 800], [390, 844], [320, 640]]) {
+        await page.setViewportSize({ width: w, height: h });
+        await page.waitForTimeout(250); // layout en meting laten bijkomen
+        await toggle.waitFor();
+        if (!(await nav.isVisible())) await toggle.click();
+        await nav.waitFor();
+        const g = await page.evaluate(() => {
+          const r = (e: Element | null) => e!.getBoundingClientRect();
+          const n = r(document.querySelector("nav[aria-label='Beheer']"));
+          const t = r(document.querySelector("button.menu-toggle"));
+          const hd = r(document.querySelector(".site-header"));
+          return { nl: n.left, nr: n.right, nt: n.top, tr: t.right, tl: t.left, tb: t.bottom, hb: hd.bottom, vw: window.innerWidth };
+        });
+        expect(g.nl, `${w}px: links buiten beeld`).toBeGreaterThanOrEqual(0);
+        expect(g.nr, `${w}px: rechts buiten beeld`).toBeLessThanOrEqual(g.vw);
+        expect(g.nt, `${w}px: paneel moet onder de kop beginnen`).toBeGreaterThanOrEqual(g.hb - 1);
+        expect(g.nl < g.tr && g.nr > g.tl, `${w}px: paneel moet onder de knop hangen`).toBe(true);
+        if (w >= 600) expect(Math.abs(g.nr - g.tr), `${w}px: rechterkanten gelijk`).toBeLessThanOrEqual(2);
+        if (process.env.MENU_SHOTS) await page.screenshot({ path: `${process.env.MENU_SHOTS}/menu-${w}.png` });
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
       await toggle.waitFor();
       if (!(await nav.isVisible())) await toggle.click();
-      await nav.waitFor();
-      const g = await page.evaluate(() => {
-        const r = (e: Element | null) => e!.getBoundingClientRect();
-        const n = r(document.querySelector("nav[aria-label='Beheer']"));
-        const t = r(document.querySelector("button.menu-toggle"));
-        const hd = r(document.querySelector(".site-header"));
-        return { nl: n.left, nr: n.right, nt: n.top, tr: t.right, tl: t.left, tb: t.bottom, hb: hd.bottom, vw: window.innerWidth };
-      });
-      expect(g.nl, `${w}px: links buiten beeld`).toBeGreaterThanOrEqual(0);
-      expect(g.nr, `${w}px: rechts buiten beeld`).toBeLessThanOrEqual(g.vw);
-      expect(g.nt, `${w}px: paneel moet onder de kop beginnen`).toBeGreaterThanOrEqual(g.hb - 1);
-      expect(g.nl < g.tr && g.nr > g.tl, `${w}px: paneel moet onder de knop hangen`).toBe(true);
-      if (w >= 600) expect(Math.abs(g.nr - g.tr), `${w}px: rechterkanten gelijk`).toBeLessThanOrEqual(2);
-      if (process.env.MENU_SHOTS) await page.screenshot({ path: `${process.env.MENU_SHOTS}/menu-${w}.png` });
+      await page.keyboard.press("Escape");
+      expect(await nav.isVisible()).toBe(false);
+      await toggle.click();
+      await page.mouse.click(10, 700); // buiten het menu tikken sluit het
+      await nav.waitFor({ state: "hidden", timeout: 5000 });
+      await toggle.click();
+      await nav.locator("a", { hasText: "Leden" }).first().click();
+      await page.waitForURL("**/beheer/leden");
+      await nav.waitFor({ state: "hidden", timeout: 5000 }); // sluit na het kiezen van een pagina
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    } finally {
+      await ctx.close();
+      await db.update(schema.user).set({ twoFactorEnabled: false }).where(eq(schema.user.id, "adm"));
     }
-    await page.setViewportSize({ width: 390, height: 844 });
-    await toggle.waitFor();
-    if (!(await nav.isVisible())) await toggle.click();
-    await page.keyboard.press("Escape");
-    expect(await nav.isVisible()).toBe(false);
-    await toggle.click();
-    await page.mouse.click(10, 700); // buiten het menu tikken sluit het
-    await nav.waitFor({ state: "hidden", timeout: 5000 });
-    await toggle.click();
-    await nav.locator("a", { hasText: "Leden" }).first().click();
-    await page.waitForURL("**/beheer/leden");
-    await nav.waitFor({ state: "hidden", timeout: 5000 }); // sluit na het kiezen van een pagina
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await ctx.close();
-    await db.update(schema.user).set({ twoFactorEnabled: false }).where(eq(schema.user.id, "adm"));
   });
 
   it("beheer: import met eigen kolomnamen, kolomkoppeling, voorbeeld, bevestigen en herhaald importeren zonder dubbelen", async () => {

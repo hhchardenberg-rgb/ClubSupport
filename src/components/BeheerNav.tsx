@@ -16,6 +16,8 @@ export function BeheerNav({ links }: { links: { href: string; label: string }[] 
   const toggleRef = useRef<HTMLButtonElement>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState(false);
+  const openRef = useRef(false);
+  openRef.current = open;
 
   const measure = useCallback(() => {
     const nav = navRef.current;
@@ -29,16 +31,6 @@ export function BeheerNav({ links }: { links: { href: string; label: string }[] 
     const used = others.reduce((sum, c) => sum + c.offsetWidth, 0) + others.length * gap;
     setCollapsed(ghost.scrollWidth + 12 > inner - used);
   }, []);
-
-  useLayoutEffect(() => {
-    measure();
-    const parent = navRef.current?.parentElement;
-    if (!parent) return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(parent);
-    document.fonts?.ready.then(measure).catch(() => undefined);
-    return () => ro.disconnect();
-  }, [measure, links.length]);
 
   /** Paneel onder de knop uitlijnen (rechterkant gelijk aan de knop); op smalle schermen binnen de kop houden. */
   const place = useCallback(() => {
@@ -55,6 +47,19 @@ export function BeheerNav({ links }: { links: { href: string; label: string }[] 
     nav.style.width = `${width}px`;
     nav.style.right = `${right}px`;
   }, []);
+
+  useLayoutEffect(() => {
+    measure();
+    const parent = navRef.current?.parentElement;
+    if (!parent) return;
+    const ro = new ResizeObserver(() => {
+      measure();
+      if (openRef.current) place(); // paneel meebewegen als de breedte verandert terwijl het open staat
+    });
+    ro.observe(parent);
+    document.fonts?.ready.then(measure).catch(() => undefined);
+    return () => ro.disconnect();
+  }, [measure, place, links.length]);
 
   useLayoutEffect(() => {
     if (!open) return;

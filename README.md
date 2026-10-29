@@ -216,3 +216,7 @@ Standaard: scanlog 90 dagen · auditlog 730 dagen · verwijderde leden 90 dagen 
 - App-iconen, favicon, en e-mailafbeeldingen worden uit het logo gegenereerd: `node scripts/make-icons.mjs brand-source/HHC_ClubSupport_Logo_RGB.png` (vereist Chromium via Playwright). Het bronbestand staat in `brand-source/`.
 - DIN-fonts zijn door HHC aangeleverd; controleer of de licentie webgebruik dekt.
 - Niet getest op een echt iOS-/Android-toestel en niet met een echt Resend-account; zie [docs/TESTING.md](docs/TESTING.md).
+
+## Handleiding
+
+`npm run handleiding` maakt de gebruikershandleiding (`handleiding-out/HHC-ClubSupport-handleiding.pdf`, A4, in de stijl van de pitch). De schermen worden opnieuw opgenomen tegen een lokale testdatabase met uitsluitend verzonnen gegevens (`scripts/handleiding/capture.test.ts`); de opmaak staat in `scripts/handleiding/build.mjs`. Pas de tekst daar aan wanneer het gedrag van de app verandert.
