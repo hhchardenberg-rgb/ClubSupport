@@ -168,8 +168,8 @@ export function ScannerApp() {
             {p.icon}
             <h1 className="sr-title">{p.title}</h1>
           </div>
-          <div className="sr-body">
-            {p.reason && <p className={`sr-reason${p.name ? "" : " alone"}`}>{p.reason}</p>}
+          <div className={`sr-body${p.name ? "" : " solo"}`}>
+            {p.reason ? <p className={`sr-reason${p.name ? "" : " alone"}`}>{p.reason}</p> : p.name ? <p className="sr-reason" aria-hidden="true">&nbsp;</p> : null}
             {p.name && <p className="sr-name">{p.name}</p>}
             {p.number && <p className="sr-num">Lidnummer <b>{p.number}</b></p>}
             {p.lines && (

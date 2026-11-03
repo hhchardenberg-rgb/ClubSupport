@@ -147,6 +147,44 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     await ctx.close();
   });
 
+  it("uitlijning: elke uitslag heeft dezelfde kaarthoogte en de knop blijft op dezelfde plek", async () => {
+    const { ctx, page } = await scannerPage("iPhone 13");
+    const outcomes: Record<string, { status: number; body: unknown } | "abort"> = {
+      geldig: { status: 200, body: { outcome: "valid", name: "Maria Johanna van der Westhuizen-de Boer", memberNumber: "1001" } },
+      gedeactiveerd: { status: 200, body: { outcome: "inactive", name: "Jeroen Smit", memberNumber: "1008" } },
+      lidmaatschap: { status: 200, body: { outcome: "membership_invalid", name: "Marloes Dijkstra", memberNumber: "1009" } },
+      ingetrokken: { status: 200, body: { outcome: "revoked" } },
+      onbekend: { status: 200, body: { outcome: "unknown" } },
+      wachten: { status: 429, body: { outcome: "rate_limited" } },
+      verbinding: "abort",
+    };
+    const metingen: Record<string, { h: number; btn: number; name: number | null }> = {};
+    let eerste = true;
+    for (const [naam, o] of Object.entries(outcomes)) {
+      await page.unroute("**/api/scan");
+      await page.route("**/api/scan", (r) => (o === "abort" ? r.abort("internetdisconnected") : r.fulfill({ status: o.status, contentType: "application/json", body: JSON.stringify(o.body) })));
+      if (!eerste) await page.click("button:has-text('Volgende scan')");
+      eerste = false;
+      await page.fill("#code", "X".repeat(43));
+      await page.click("button:has-text('Controleren')");
+      await page.waitForSelector("section[role=alert] h1");
+      await page.waitForTimeout(350); // animatie afwachten
+      metingen[naam] = await page.evaluate(() => {
+        const card = document.querySelector("section[role=alert]")!.getBoundingClientRect();
+        const btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Volgende scan"))!.getBoundingClientRect();
+        const nm = document.querySelector(".sr-name")?.getBoundingClientRect();
+        return { h: Math.round(card.height), btn: Math.round(btn.top - card.top), name: nm ? Math.round(nm.top - card.top) : null };
+      });
+    }
+    const hoogtes = new Set(Object.values(metingen).map((m) => m.h));
+    const knoppen = new Set(Object.values(metingen).map((m) => m.btn));
+    expect([...hoogtes], `kaarthoogtes verschillen: ${JSON.stringify(metingen)}`).toHaveLength(1);
+    expect([...knoppen], `knop verspringt: ${JSON.stringify(metingen)}`).toHaveLength(1);
+    const namen = new Set(Object.values(metingen).map((m) => m.name).filter((x) => x !== null));
+    expect([...namen], `naam staat niet op dezelfde plek: ${JSON.stringify(metingen)}`).toHaveLength(1);
+    await ctx.close();
+  });
+
   it("zonder verbinding: NIET GECONTROLEERD, nooit GELDIG", async () => {
     const { ctx, page } = await scannerPage("Pixel 5");
     await ctx.setOffline(true);
