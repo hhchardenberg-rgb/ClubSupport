@@ -84,9 +84,16 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
   it("camera start pas na tik en stopt na het resultaat; handmatige invoer toont GELDIG met naam en lidnummer", async () => {
     const { ctx, page, csp } = await scannerPage("Pixel 5");
     expect(await page.locator("video").count(), "geen camera vóór de tik").toBe(0);
+    const vak = () => page.evaluate(() => {
+      const st = document.querySelector(".scan-stage")!.getBoundingClientRect();
+      const b = [...document.querySelectorAll(".scan-actions button")][0].getBoundingClientRect();
+      return { h: Math.round(st.height), btn: Math.round(b.top - st.top) };
+    });
+    const rust = await vak();
     await page.click("button:has-text('Scan starten')");
     await page.waitForSelector("video", { timeout: 15000 });
     expect(await page.locator("video").count()).toBeGreaterThan(0);
+    expect(await vak(), "camera vult hetzelfde vak als de uitslag").toEqual(rust);
     await shot(page, "scanner-camera");
     await page.fill("#code", token);
     await page.click("button:has-text('Controleren')");
@@ -94,6 +101,7 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
     expect(await page.locator("section[role=alert]").innerText()).toContain("Anna 21");
     expect(await page.locator("section[role=alert]").innerText()).toContain("Lidnummer T21");
     expect(await page.locator("video:visible").count(), "camera gestopt na resultaat").toBe(0);
+    expect(await vak(), "uitslag in hetzelfde vak als de camera").toEqual(rust);
     await shot(page, "scanner-geldig");
     expect(csp).toEqual([]);
     await ctx.close();
@@ -159,6 +167,12 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
       verbinding: "abort",
     };
     const metingen: Record<string, { h: number; btn: number; name: number | null }> = {};
+    const stageMeting = () => page.evaluate(() => {
+      const st = document.querySelector(".scan-stage")!.getBoundingClientRect();
+      const b = [...document.querySelectorAll(".scan-actions button")][0].getBoundingClientRect();
+      return { h: Math.round(st.height), btn: Math.round(b.top - st.top), name: null as number | null };
+    });
+    metingen["rust"] = await stageMeting();
     let eerste = true;
     for (const [naam, o] of Object.entries(outcomes)) {
       await page.unroute("**/api/scan");
@@ -171,9 +185,10 @@ describe("Scanner in de browser (tests 2, 8, 15 voor zover in Chromium-emulatie)
       await page.waitForTimeout(350); // animatie afwachten
       metingen[naam] = await page.evaluate(() => {
         const card = document.querySelector("section[role=alert]")!.getBoundingClientRect();
+        const st = document.querySelector(".scan-stage")!.getBoundingClientRect();
         const btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Volgende scan"))!.getBoundingClientRect();
         const nm = document.querySelector(".sr-name")?.getBoundingClientRect();
-        return { h: Math.round(card.height), btn: Math.round(btn.top - card.top), name: nm ? Math.round(nm.top - card.top) : null };
+        return { h: Math.round(st.height), btn: Math.round(btn.top - st.top), name: nm ? Math.round(nm.top - card.top) : null };
       });
     }
     const hoogtes = new Set(Object.values(metingen).map((m) => m.h));

@@ -118,7 +118,9 @@ export function ScannerApp() {
       const { Html5Qrcode } = await import("html5-qrcode");
       const q = new Html5Qrcode("scan-region", { verbose: false });
       scanner.current = q as unknown as typeof scanner.current;
-      await q.start({ facingMode: "environment" }, { fps: 10, qrbox: (w, h) => ({ width: Math.min(w, h, 280), height: Math.min(w, h, 280) }) }, (text) => void check(text), () => undefined);
+      const st = document.querySelector(".scan-stage")?.getBoundingClientRect();
+      const aspectRatio = st && st.height > 0 ? Math.round((st.width / st.height) * 100) / 100 : undefined; // camerabeeld past in hetzelfde vak als de uitslag
+      await q.start({ facingMode: "environment" }, { fps: 10, aspectRatio, qrbox: (w, h) => ({ width: Math.min(w, h, 260), height: Math.min(w, h, 260) }) }, (text) => void check(text), () => undefined);
     } catch (e) {
       scanner.current = null;
       setPhase("idle");
@@ -162,6 +164,7 @@ export function ScannerApp() {
           Geen verbinding. Scannen is niet mogelijk: er wordt nooit een pas als geldig getoond zonder controle.
         </p>
       )}
+      <div className="scan-stage">
       {phase === "result" && p && (
         <section role="alert" aria-live="assertive" className={`sr ${p.cls}`}>
           <div className="sr-head">
@@ -182,6 +185,13 @@ export function ScannerApp() {
           </div>
         </section>
       )}
+      {phase === "idle" && (
+        <div className="sr-idle">
+          <svg aria-hidden="true" width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 20V12a4 4 0 014-4h8M36 8h8a4 4 0 014 4v8M48 36v8a4 4 0 01-4 4h-8M20 48h-8a4 4 0 01-4-4v-8" /><rect x="19" y="19" width="7" height="7" rx="1.5" /><rect x="30" y="19" width="7" height="7" rx="1.5" /><rect x="19" y="30" width="7" height="7" rx="1.5" /><path d="M31 33h6M34 30v7" /></svg>
+          <p className="sr-idle-title">Klaar om te scannen</p>
+          <p className="sr-idle-sub">Tik op Scan starten en richt de camera op de QR-code.</p>
+        </div>
+      )}
       {phase === "checking" && (
         <p role="status" className="sr-wait">
           <span className="sr-spin" aria-hidden="true" />
@@ -189,8 +199,10 @@ export function ScannerApp() {
         </p>
       )}
 
+
       <div id="scan-region" className={phase === "scanning" ? "scan-region on" : "scan-region"} />
-      {phase === "scanning" && <p className="muted" role="status">Richt de camera op de QR-code.</p>}
+      {phase === "scanning" && <p className="scan-hint" role="status">Richt de camera op de QR-code.</p>}
+      </div>
 
       <div className="row scan-actions">
         {phase === "result" ? (
