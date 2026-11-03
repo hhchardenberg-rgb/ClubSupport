@@ -6,28 +6,30 @@ type Phase = "idle" | "scanning" | "checking" | "result";
 
 const Icon = {
   check: (
-    <svg aria-hidden="true" width="96" height="96" viewBox="0 0 96 96"><circle cx="48" cy="48" r="44" fill="#ff6600" stroke="#fff" strokeWidth="4" /><path d="M26 50l15 15 30-34" fill="none" stroke="#000" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    <svg aria-hidden="true" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="#ff6600" /><path d="M11.5 20.5l6 6 11-12.5" fill="none" stroke="#000" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
   ),
   cross: (
-    <svg aria-hidden="true" width="96" height="96" viewBox="0 0 96 96"><circle cx="48" cy="48" r="44" fill="#fff" /><path d="M31 31l34 34M65 31L31 65" stroke="#b00020" strokeWidth="10" strokeLinecap="round" /></svg>
+    <svg aria-hidden="true" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="#fff" /><path d="M13.5 13.5l13 13M26.5 13.5l-13 13" stroke="#b00020" strokeWidth="3.6" strokeLinecap="round" /></svg>
   ),
   offline: (
-    <svg aria-hidden="true" width="96" height="96" viewBox="0 0 96 96"><circle cx="48" cy="48" r="44" fill="#000" /><path d="M20 38a40 40 0 0156 0M30 49a26 26 0 0136 0M40 60a12 12 0 0116 0" fill="none" stroke="#ff6600" strokeWidth="7" strokeLinecap="round" /><circle cx="48" cy="72" r="5" fill="#ff6600" /><path d="M22 74L74 22" stroke="#fff" strokeWidth="7" strokeLinecap="round" /></svg>
+    <svg aria-hidden="true" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="#000" /><path d="M8.5 16a16.5 16.5 0 0123 0M13 21.5a10 10 0 0114 0M17 27a4 4 0 016 0" fill="none" stroke="#ff6600" strokeWidth="2.6" strokeLinecap="round" /><circle cx="20" cy="31" r="2" fill="#ff6600" /><path d="M10 31L30 9" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" /></svg>
   ),
 };
 
-function panelFor(v: ScanView) {
+type Panel = { cls: "ok" | "bad" | "warn"; icon: React.ReactNode; title: string; reason?: string; name?: string; number?: string; lines?: string[]; hint?: string };
+
+function panelFor(v: ScanView): Panel {
   switch (v.kind) {
     case "valid":
-      return { cls: "ok", icon: Icon.check, title: "GELDIG", lines: [v.name, `Lidnummer ${v.memberNumber}`] };
+      return { cls: "ok", icon: Icon.check, title: "GELDIG", name: v.name, number: v.memberNumber, hint: "Vergelijk de naam met het legitimatiebewijs." };
     case "inactive":
-      return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", lines: ["Pas gedeactiveerd", v.name, `Lidnummer ${v.memberNumber}`] };
+      return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", reason: "Pas gedeactiveerd", name: v.name, number: v.memberNumber };
     case "membership":
-      return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", lines: ["Lidmaatschap niet geldig", v.name, `Lidnummer ${v.memberNumber}`] };
+      return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", reason: "Lidmaatschap niet geldig", name: v.name, number: v.memberNumber };
     case "revoked":
-      return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", lines: ["Pas ingetrokken of verwijderd"] };
+      return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", reason: "Pas ingetrokken of verwijderd" };
     case "unknown":
-      return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", lines: ["Onbekende code"] };
+      return { cls: "bad", icon: Icon.cross, title: "ONGELDIG", reason: "Onbekende code" };
     case "wait":
       return { cls: "warn", icon: Icon.offline, title: "EVEN WACHTEN", lines: ["Te veel scans achter elkaar", "Probeer het zo opnieuw"] };
     case "session":
@@ -152,41 +154,51 @@ export function ScannerApp() {
   }, [phase]);
 
   const p = view ? panelFor(view) : null;
-  const panelStyle: Record<string, React.CSSProperties> = {
-    ok: { background: "#000", color: "#fff", border: "8px solid #ff6600" },
-    bad: { background: "#b00020", color: "#fff", border: "8px solid #000" },
-    warn: { background: "#ff6600", color: "#000", border: "8px solid #000" },
-  };
 
   return (
     <div>
       {!online && (
-        <p role="alert" className="card" style={{ background: "#ff6600", fontWeight: 700 }}>
+        <p role="alert" className="alert warning">
           Geen verbinding. Scannen is niet mogelijk: er wordt nooit een pas als geldig getoond zonder controle.
         </p>
       )}
       {phase === "result" && p && (
-        <section role="alert" aria-live="assertive" style={{ ...panelStyle[p.cls], borderRadius: 8, padding: "24px 16px", textAlign: "center", margin: "12px 0" }}>
-          {p.icon}
-          <h1 style={{ fontSize: "clamp(1.6rem, 8.5vw, 3.2rem)", margin: "8px 0", fontWeight: 900, overflowWrap: "anywhere", lineHeight: 1.05 }}>{p.title}</h1>
-          {p.lines.map((l, i) => (
-            <p key={l} style={{ margin: "4px 0", fontSize: i === 0 && p.cls !== "ok" ? "1.5rem" : "1.7rem", fontWeight: 700 }}>{l}</p>
-          ))}
-          {view?.kind === "valid" && <p style={{ fontSize: "1rem", marginTop: 12 }}>Vergelijk de naam met het legitimatiebewijs.</p>}
+        <section role="alert" aria-live="assertive" className={`sr ${p.cls}`}>
+          <div className="sr-head">
+            {p.icon}
+            <h1 className="sr-title">{p.title}</h1>
+          </div>
+          <div className="sr-body">
+            {p.reason && <p className={`sr-reason${p.name ? "" : " alone"}`}>{p.reason}</p>}
+            {p.name && <p className="sr-name">{p.name}</p>}
+            {p.number && <p className="sr-num">Lidnummer <b>{p.number}</b></p>}
+            {p.lines && (
+              <>
+                <p className="sr-reason alone">{p.lines[0]}</p>
+                {p.lines[1] && <p className="sr-sub">{p.lines[1]}</p>}
+              </>
+            )}
+            {p.hint && <p className="sr-hint">{p.hint}</p>}
+          </div>
         </section>
       )}
-      {phase === "checking" && <p role="status" className="card" style={{ fontSize: "1.4rem", fontWeight: 700 }}>Controleren…</p>}
+      {phase === "checking" && (
+        <p role="status" className="sr-wait">
+          <span className="sr-spin" aria-hidden="true" />
+          Controleren…
+        </p>
+      )}
 
-      <div id="scan-region" style={{ width: "100%", display: phase === "scanning" ? "block" : "none", background: "#000" }} />
+      <div id="scan-region" className={phase === "scanning" ? "scan-region on" : "scan-region"} />
       {phase === "scanning" && <p className="muted" role="status">Richt de camera op de QR-code.</p>}
 
-      <div className="row" style={{ margin: "12px 0" }}>
+      <div className="row scan-actions">
         {phase === "result" ? (
-          <button ref={nextRef} onClick={startCamera} disabled={!online} style={{ flex: 1, minHeight: 64, fontSize: "1.4rem" }}>Volgende scan</button>
+          <button ref={nextRef} onClick={startCamera} disabled={!online} className="scan-cta">Volgende scan</button>
         ) : phase === "scanning" ? (
-          <button className="secondary" onClick={async () => { await stopCamera(); setPhase("idle"); }} style={{ flex: 1, minHeight: 56 }}>Camera stoppen</button>
+          <button className="secondary scan-cta" onClick={async () => { await stopCamera(); setPhase("idle"); }}>Camera stoppen</button>
         ) : (
-          <button onClick={startCamera} disabled={!online || phase === "checking"} style={{ flex: 1, minHeight: 64, fontSize: "1.4rem" }}>Scan starten</button>
+          <button onClick={startCamera} disabled={!online || phase === "checking"} className="scan-cta">Scan starten</button>
         )}
       </div>
       {camError && <p role="alert" className="error">{camError}</p>}
@@ -227,17 +239,17 @@ export function ScannerApp() {
         <div aria-live="polite">
           {lookup?.kind === "results" && lookup.results.length === 0 && <p className="notice">Geen lid gevonden. Controleer de schrijfwijze of zoek op lidnummer.</p>}
           {lookup?.kind === "results" && lookup.results.length > 0 && (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
+            <ul className="lk-list">
               {lookup.results.map((r) => {
-                const st = r.pass === "active" ? { bg: "#000", fg: "#fff", bd: "#ff6600", icon: Icon.check, label: "PAS ACTIEF", sub: "Geldig lid" } : r.pass === "deactivated" ? { bg: "#b00020", fg: "#fff", bd: "#000", icon: Icon.cross, label: "PAS GEDEACTIVEERD", sub: "Niet geldig" } : r.pass === "membership" ? { bg: "#b00020", fg: "#fff", bd: "#000", icon: Icon.cross, label: "LIDMAATSCHAP NIET GELDIG", sub: "Pas niet bruikbaar" } : { bg: "#ff6600", fg: "#000", bd: "#000", icon: Icon.cross, label: "GEEN ACTIEVE PAS", sub: "Niet geldig" };
+                const st = r.pass === "active" ? { cls: "ok", icon: Icon.check, label: "PAS ACTIEF", sub: "Geldig lid" } : r.pass === "deactivated" ? { cls: "bad", icon: Icon.cross, label: "PAS GEDEACTIVEERD", sub: "Niet geldig" } : r.pass === "membership" ? { cls: "bad", icon: Icon.cross, label: "LIDMAATSCHAP NIET GELDIG", sub: "Pas niet bruikbaar" } : { cls: "warn", icon: Icon.cross, label: "GEEN ACTIEVE PAS", sub: "Niet geldig" };
                 return (
-                  <li key={r.memberNumber} style={{ background: st.bg, color: st.fg, border: `5px solid ${st.bd}`, borderRadius: 10, padding: 12, display: "flex", gap: 12, alignItems: "center" }}>
-                    <span style={{ flex: "0 0 auto", transform: "scale(.6)", transformOrigin: "left center", width: 58 }}>{st.icon}</span>
-                    <span>
-                      <strong style={{ display: "block", fontSize: "1.3rem" }}>{r.name}</strong>
-                      <span>Lidnummer {r.memberNumber}</span>
-                      <strong style={{ display: "block", marginTop: 4 }}>{st.label} · {st.sub}</strong>
+                  <li key={r.memberNumber} className={`lk ${st.cls}`}>
+                    <span className="lk-icon">{st.icon}</span>
+                    <span className="lk-main">
+                      <strong className="lk-name">{r.name}</strong>
+                      <span className="lk-num">Lidnummer {r.memberNumber}</span>
                     </span>
+                    <span className="lk-state"><b>{st.label}</b> · {st.sub}</span>
                   </li>
                 );
               })}
@@ -247,7 +259,7 @@ export function ScannerApp() {
           {lookup?.kind === "invalid" && <p className="notice" role="status">Voer een naam (minimaal 3 letters) of een lidnummer in.</p>}
           {lookup?.kind === "wait" && <p className="notice" role="status">Even wachten: te veel zoekopdrachten achter elkaar.</p>}
           {lookup?.kind === "session" && <p className="notice" role="alert">Sessie verlopen. Log opnieuw in.</p>}
-          {lookup?.kind === "unchecked" && <p role="alert" style={{ background: "#ff6600", border: "4px solid #000", borderRadius: 8, padding: 12, fontWeight: 700 }}>NIET GECONTROLEERD · verbinding nodig. Er is geen status vastgesteld.</p>}
+          {lookup?.kind === "unchecked" && <p role="alert" className="alert warning"><b>NIET GECONTROLEERD</b> · verbinding nodig. Er is geen status vastgesteld.</p>}
         </div>
       </form>
     </div>

@@ -49,7 +49,7 @@ Uitgangspunt is het **HHC-huisstijlhandboek 2024**; er is geen nieuwe huisstijl 
 
 **Samengevat per ervaring**
 - **Ledenpas:** de pas is een kaart (oranje kopstrook met logo, zwart vlak, witte QR). Meerdere passen staan in een veegbare carrousel met pijlen, stippen en toetsenbord; de volgende kaart piekt in beeld.
-- **Scanner:** één grote actie ("Scan starten"), resultaten als vol-scherm-paneel met icoon én tekst: GELDIG (zwart + oranje vinkje), ONGELDIG (rood + kruis), NIET GECONTROLEERD (oranje + geen-verbinding-icoon). Leesbaar in fel licht door hoog contrast en grote letters.
+- **Scanner:** één grote actie ("Scan starten"), resultaten als compacte statuskaart: een kleurband met icoon en status (GELDIG zwart + oranje vinkje, ONGELDIG rood + kruis, NIET GECONTROLEERD oranje + geen-verbinding-icoon) boven een wit vlak met de naam groot, het lidnummer als chip en bij ongeldig de reden. Leesbaar in fel licht door hoog contrast; geen vlakvullend scherm of dikke randen.
 - **Beheer:** compacte header met menu (op telefoon een veegbare rij), tweekoloms lidpagina op desktop, tabellen die op telefoon horizontaal scrollen, overal dezelfde knoppen, meldingen en statusbadges.
 - **Herbruikbare onderdelen:** `src/components/ui.tsx` (`Alert`, `Flash`, `StatusBadge`, `Badge`, `PageTitle`, `EmptyState`), `Logo`, `SiteHeader`, `AuthShell`, `PassCarousel`, en de ontwerptokens/klassen in `src/app/globals.css`.
 
